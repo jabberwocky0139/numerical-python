@@ -77,6 +77,6 @@ class GrossPitaevskii():
 
 
 #GrossPitaevskii.PrintProcedure()
-hundle = GrossPitaevskii()
+hundle = GrossPitaevskii(gN=50)
 hundle.PrintProcedure()
 
