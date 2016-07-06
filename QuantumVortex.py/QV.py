@@ -75,6 +75,9 @@ class GrossPitaevskii():
         plt.legend(loc = 'center right')
         plt.show()
 
+        
+class QuantumVortex(GrossPitaevskii):
+    
 
 #GrossPitaevskii.PrintProcedure()
 hundle = GrossPitaevskii()
