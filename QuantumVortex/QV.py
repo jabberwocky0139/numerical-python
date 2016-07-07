@@ -15,13 +15,13 @@ class GrossPitaevskii():
     def __init__(self, gN=50):
 
         # Volume, Maximum x-step
-        self.L, self.xN = 12, 300
+        self.L, self.xN = 12, 256
 
         # Interaction constant, Chemical potential
         self.gN, self.mu, self.kappa = gN, 10, 2
 
         # Maximum time, Time step 
-        self.tMax, self.tN = 2, 512
+        self.tMax, self.tN = 1, 512
 
         # x-step, Time step
         self.h, self.dt = self.L/self.xN, self.tMax/self.tN
@@ -34,11 +34,7 @@ class GrossPitaevskii():
         
 
         # -*- For 2D-Symplectic -*-        
-        
-        # Set xy-space
-        self.x2d = np.arange(-self.xN/2, self.xN/2)
-        self.y2d = self.x.reshape(self.xN, 1)
-        
+                
         #self.xy = self.h*np.sqrt(self.y2d**2+self.x2d**2)
         self.xy = [[0 for i in range(self.xN)] for j in range(self.xN)]
         
@@ -126,16 +122,16 @@ class GrossPitaevskii():
         #--- 連立方程式の計算 ---#
         self.arr_Psi = solve(a, b)
         #--- μの補正 ---#
-        norm2 = simps(self.x*self.arr_Psi**2, self.x)
-        self.mu -= (norm2 - 1)/(2*self.dt)
+        norm = simps(self.x*self.arr_Psi**2, self.x)/(2*np.pi)
+        self.mu -= (norm - 1)/(2*self.dt)
 
         # 規格化 #
-        self.arr_Psi = self.arr_Psi/np.sqrt(norm2)
+        self.arr_Psi = self.arr_Psi/np.sqrt(norm)
 
         
     def GaussSeidelLoop(self):
         old_mu = 0
-        while(np.abs(self.mu - old_mu) > 1e-9):
+        while(np.abs(self.mu - old_mu) > 1e-7):
             old_mu = self.mu
             self.__GaussSeidel()
             #self.PrintProcedure()
@@ -154,7 +150,7 @@ class GrossPitaevskii():
 
     # Time evolution
     def Symplectic(self):
-        #self.tN = 500
+
         self.pre_expV = np.exp(-1j*self.__V(self.xy)*self.dt)
         self.pre_expV_inst = np.exp(-1j*self.__VInst()*self.dt)
         self.expK = np.exp(-1j*(self.kx**2 + self.ky**2)*self.dt)
@@ -167,7 +163,7 @@ class GrossPitaevskii():
             
             # Correction of chemical potential mu
             # 矩形積分. 雑なので直したい
-            norm = np.sum(self.xy*np.abs(self.arr_Psi2D**2))*self.h**2/(2*np.pi)
+            norm = np.sum(np.abs(self.arr_Psi2D)**2)*self.h**2
             self.mu -= (norm - 1)/(2*self.dt)
             print(self.mu)
 
@@ -175,8 +171,7 @@ class GrossPitaevskii():
             self.arr_Psi2D /= np.sqrt(norm)
 
             # Reconfigure expV
-            #if(self.tN > 5):
-            if(i > 20):
+            if(i > 30):
                 self.expV = np.exp(-1j*(-self.mu + self.gN*self.arr_Psi2D**2)*self.dt)*self.pre_expV
             else:
                 self.expV = np.exp(-1j*(-self.mu +self.gN*self.arr_Psi2D**2)*self.dt)*self.pre_expV_inst
@@ -206,6 +201,7 @@ class GrossPitaevskii():
         
         if(type == "abs"):
             plt.pcolor(X, Y, np.abs(self.arr_Psi2D))
+            plt.clim(0, 0.5)
             plt.colorbar()
         elif(type == "angle"):
             plt.pcolor(X, Y, np.angle(self.arr_Psi2D))
