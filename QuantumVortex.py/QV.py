@@ -15,7 +15,7 @@ class GrossPitaevskii():
     def __init__(self, gN=50):
 
         # Volume, Maximum x-step
-        self.L, self.xN = 8, 256
+        self.L, self.xN = 16, 300
 
         # Interaction constant, Chemical potential
         self.gN, self.mu, self.kappa = gN, 10, 2
@@ -63,6 +63,7 @@ class GrossPitaevskii():
         
         return a + c + d
 
+    
     def __MakeCrankVector(self):
         
         a = (-2 - self.kappa**2/np.arange(1, self.xN+1)**2 + self.h**2*(self.mu - self.__V(self.x) - self.gN*self.arr_Psi**2 + 2/self.dt))*self.arr_Psi
@@ -78,6 +79,7 @@ class GrossPitaevskii():
         
         return -a - c - d
 
+    
     def __GaussSeidel(self):
         #--- 行列の用意 ---#
         a = self.__MakeCrankMatrix()
@@ -93,6 +95,7 @@ class GrossPitaevskii():
         # 規格化 #
         self.arr_Psi = self.arr_Psi/np.sqrt(norm2)
 
+        
     def GaussSeidelLoop(self):
         old_mu = 0
         while(np.abs(self.mu - old_mu) > 1e-5):
@@ -101,14 +104,16 @@ class GrossPitaevskii():
             #self.PrintProcedure()
             print(self.mu)
 
+            
     def ExpandFor2D(self):
         self.arr_Psi2D = [[0 for i in range(self.xN)] for j in range(self.xN)]
 
         for i in range(self.xN):
             for j in range(self.xN):
                 index = int(np.sqrt((i - self.xN/2)**2 + (j - self.xN/2)**2))
-                self.arr_Psi2D[i][j] = self.arr_Psi[index]
-        print(self.arr_Psi2D)
+                theta = np.angle(i - self.xN/2 + 1j*(j - self.xN/2))
+                self.arr_Psi2D[i][j] = self.arr_Psi[index]*np.exp(1j*self.kappa*theta)
+                
             
     def PrintProcedureFor1D(self):
 
@@ -122,16 +127,22 @@ class GrossPitaevskii():
         plt.title("Static soliton of Gross-Pitaevskii equation")
         plt.legend(loc = 'center right')
         plt.show()
+        
 
-    def PrintProcedureFor2D(self):
+    def PrintProcedureFor2D(self, type="abs"):
+        
         x = np.arange(self.xN)
         y = np.arange(self.xN)
-
         X, Y = np.meshgrid(x, y)
-        plt.pcolor(X, Y, np.real(self.arr_Psi2D))
+        
+        if(type == "abs"):
+            plt.pcolor(X, Y, np.real(np.abs(self.arr_Psi2D)))
+        else(type == "angle"):
+            plt.pcolor(X, Y, np.real(np.angle(self.arr_Psi2D)))
+            
         plt.axis("equal")
-        plt.xlim(0, 250)
-        plt.ylim(0, 250)
+        plt.xlim(0, self.xN)
+        plt.ylim(0, self.xN)
         plt.show()
         
 
@@ -142,5 +153,5 @@ hundle = GrossPitaevskii(gN=50)
 hundle.GaussSeidelLoop()
 #hundle.PrintProcedureFor1D()
 hundle.ExpandFor2D()
-#hundle.PrintProcedure()
+hundle.PrintProcedureFor2D()
 
