@@ -124,7 +124,15 @@ class GrossPitaevskii():
         plt.show()
 
     def PrintProcedureFor2D(self):
+        x = np.arange(self.xN)
+        y = np.arange(self.xN)
 
+        X, Y = np.meshgrid(x, y)
+        plt.pcolor(X, Y, np.real(self.arr_Psi2D))
+        plt.axis("equal")
+        plt.xlim(0, 250)
+        plt.ylim(0, 250)
+        plt.show()
         
 
 
