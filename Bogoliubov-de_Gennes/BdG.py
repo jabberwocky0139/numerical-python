@@ -51,6 +51,7 @@ imag_igen = []
 # Preparation of sub-diagonal of calL
 alpha = np.diag(np.array([h**(-2)]*xN))
 alpha = np.vstack((np.array([0]*xN), alpha[:xN-1]))
+print(alpha.shape)
 alpha += alpha.T
 
 # --*-- Gross-Pitaevskii & Bogoliubov-de Gennes --*--

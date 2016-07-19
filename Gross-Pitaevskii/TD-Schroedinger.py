@@ -17,15 +17,20 @@ from inspect import getsource
 # Note2 : Use the math function which work on gnuplot as well without any change
 def Potential(x):
     #return 0.01*(x**2 - 8*abs(x) + 16)
+    #return 2*x**2
     return 4*(x**2 - 8*abs(x) + 16);
+    
+    
 # Potential on exp
 def V(x):
     return -0.5j*Potential(x)
+
 
 # Initial function
 def Psi_0(x):
     y = lambda z: np.exp(-2*(z-7)**2)
     return y(x)/quad(y, -np.inf, np.inf)[0]/2
+
 
 # file writer
 def file_writer(filename, arr_func):
