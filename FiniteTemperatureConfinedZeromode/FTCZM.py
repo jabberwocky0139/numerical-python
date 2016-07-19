@@ -139,7 +139,7 @@ class GrossPitaevskii():
 
 
 
-class AjointModeEquation(object):
+class AjointMode(object):
 
     # Make equation matrix
     @classmethod
@@ -195,4 +195,4 @@ if(__name__ == "__main__"):
     
     var = Variable()
     GrossPitaevskii.procedure(v=var)
-    AjointModeEquation.procedure(v=var)
+    AjointMode.procedure(v=var)
