@@ -4,9 +4,11 @@ import sys
 import matplotlib.pyplot as plt
 import seaborn as sbn
 import numpy as np
-from scipy.linalg import solve
+from scipy.linalg import solve, eig, eigh
+from scipy.linalg.lapack import dgeev
 from scipy.integrate import quad, simps
 from abc import abstractmethod, ABCMeta
+from pprint import pprint
 
 
 class Variable(object):
@@ -17,12 +19,13 @@ class Variable(object):
         # 凝縮粒子数 N, 逆温度 β, 相互作用定数 g
         self.N, self.BETA, self.G = 1e5, 1e-3, 1e-3
         self.GN = self.N * self.G
+        self.G_TILDE = self.GN / (4 * np.pi)
         # プランク定数
         self.H_BAR = 1
         # 質量 m
         self.M = 1
         # r空間サイズ, 分割数
-        self.VR, self.NR = 10, 200
+        self.VR, self.NR = 50, 300
         # r空間微小幅
         self.DR = self.VR / self.NR
         # 3次元等方r空間
@@ -43,7 +46,9 @@ class Variable(object):
         # 積分パラメータ A,B,C,D,E
         self.A, self.B, self.C, self.D, self.E = [None] * 5
         # 励起エネルギー ω, 比熱・圧力用の全エネルギー
-        self.omega, self.U = [None] * 2
+        self.omega, self.omegah, self.U = [None] * 3
+        # Bogoliubov-de Gennesの固有関数
+        self.Unl, self.Vnl, self.Unlh = [None] * 3
 
 
 class PlotWrapper(metaclass=ABCMeta):
@@ -95,7 +100,7 @@ class PlotWrapper(metaclass=ABCMeta):
                     linecolor=None,
                     linewidth=2,
                     plotlabel=None,
-                    plotshow=True):
+                    showplot=True):
         # plot
         if callable(ycoor):
             plt.plot(
@@ -113,7 +118,7 @@ class PlotWrapper(metaclass=ABCMeta):
                 linewidth=linewidth)
 
         # show plot data
-        if plotshow:
+        if showplot:
             plt.legend(loc=cls.legendloc)
             plt.show()
 
@@ -190,7 +195,7 @@ class GrossPitaevskii(PlotWrapper):
 
     # Plot xi
     @classmethod
-    def __plot_procedure(cls, v):
+    def __set_plot(cls, v):
 
         cls.plot_setter(
             yrange=(0, max(v.xi**2) * 1.1),
@@ -200,16 +205,16 @@ class GrossPitaevskii(PlotWrapper):
             legendloc="center right")
 
         cls.plot_getter(
-            v.R, v.xi**2, plotlabel="gN = {0}".format(v.GN), plotshow=False)
+            v.R, v.xi**2, plotlabel="gN = {0}".format(v.GN), showplot=False)
         cls.plot_getter(v.R, v.R**2, plotlabel="Potential")
 
     # Hundle
-
     @classmethod
-    def procedure(cls, v):
+    def procedure(cls, v, showplot=True):
 
         cls.__solve_imaginarytime_gp(v)
-        cls.__plot_procedure(v)
+        if (showplot):
+            cls.__set_plot(v)
 
 
 class AdjointMode(PlotWrapper):
@@ -224,10 +229,10 @@ class AdjointMode(PlotWrapper):
         eu = np.diag(-1 / (2 * v.DR**2) * (1 + 1 / np.arange(0, v.NR)))
         eu = np.vstack((eu[1:], np.array([0] * v.NR)))
 
-        ed = np.diag(-1 / (2 * v.DR**2) * (1 - 1 / np.arange(1, v.NR + 1)))
-        ed = np.vstack((ed[1:], np.array([0] * v.NR))).T
+        el = np.diag(-1 / (2 * v.DR**2) * (1 - 1 / np.arange(1, v.NR + 1)))
+        el = np.vstack((el[1:], np.array([0] * v.NR))).T
 
-        return dr + eu + ed
+        return dr + eu + el
 
     # Obtain eta and I
     @classmethod
@@ -242,7 +247,7 @@ class AdjointMode(PlotWrapper):
 
     # Plot eta
     @classmethod
-    def __plot_procedure(cls, v):
+    def __set_plot(cls, v):
 
         cls.plot_setter(
             xlabel="r-space",
@@ -254,14 +259,125 @@ class AdjointMode(PlotWrapper):
 
     # Hundle
     @classmethod
-    def procedure(cls, v):
+    def procedure(cls, v, showplot=True):
 
         cls.__solve_adjoint_equation(v)
-        cls.__plot_procedure(v)
+        if (showplot):
+            cls.__set_plot(v)
+
+
+class Bogoliubov(PlotWrapper):
+
+    realpositiveomega, realnegativeomega = [None] * 2
+
+    l = 2
+
+    # Make matrix for Bogoliubov-de Gennes equation
+    @classmethod
+    def __make_bogoliubov_matrix(cls, v):
+
+        Ld = np.diag(1 / (2 * v.DR**2) * (2 + cls.l * (cls.l + 1) / v.R**2) +
+                     v.DR**2 * v.R**2 / 2 - v.mu + 2 * v.G_TILDE * (v.xi**2 +
+                                                                    v.Vt))
+
+        Lu = np.diag(-1 / (2 * v.DR**2) * (1 + 1 / np.arange(0, v.NR)))
+        Lu = np.vstack((Lu[1:], np.array([0] * v.NR)))
+
+        Ll = np.diag(-1 / (2 * v.DR**2) * (1 - 1 / np.arange(1, v.NR + 1)))
+        Ll = np.vstack((Ll[1:], np.array([0] * v.NR))).T
+
+        L = Ld + Lu + Ll
+
+        M = np.diag(2 * v.G_TILDE * (v.xi**2 - v.Va))
+
+        return np.hstack((np.vstack((L, -M)), np.vstack((M, -L))))
+
+    @classmethod
+    def __make_hermite_bogoliubov_matrix(cls, v):
+
+        Ld = np.diag(1 / (2 * v.DR**2) * (2 + cls.l * (cls.l + 1) / v.R**2) +
+                     v.DR**2 * v.R**2 / 2 - v.mu + 2 * v.G_TILDE * (
+                         v.xi**2 + v.Vt + v.Va / 2))
+
+        Lu = np.diag(-1 / (2 * v.DR**2) * (1 + 1 / np.arange(0, v.NR)))
+        Lu = np.vstack((Lu[1:], np.array([0] * v.NR)))
+
+        Ll = np.diag(-1 / (2 * v.DR**2) * (1 - 1 / np.arange(1, v.NR + 1)))
+        Ll = np.vstack((Ll[1:], np.array([0] * v.NR))).T
+
+        L = Ld + Lu + Ll
+
+        return L
+
+    @classmethod
+    def __solve_bogoliubov_equation(cls, v):
+
+        print("--*-- BdG --*--")
+
+        v.omega, vr = eig(cls.__make_bogoliubov_matrix(v))
+        v.Unl, v.Vnl = vr.T[:, :v.NR], vr.T[:, v.NR:]
+
+        realomega = np.real(v.omega)
+        realomega = sorted(list(zip(realomega, range(2 * v.NR))))
+        cls.realpositiveomega = realomega[v.NR:]
+        cls.realnegativeomega = realomega[:v.NR][::-1]
+
+        print("omegaU")
+        pprint(cls.realpositiveomega[:5])
+        print("omegaV")
+        pprint(cls.realnegativeomega[:5])
+
+    @classmethod
+    def __solve_hermite_bogoliubov_equation(cls, v):
+
+        print("--*-- BdG(Hermite) --*--")
+
+        v.omegah, vr = eigh(cls.__make_hermite_bogoliubov_matrix(v))
+        v.Unlh = vr.T
+
+        pprint(v.omegah[:5])
+
+    @classmethod
+    def __set_plot(cls, v):
+
+        cls.plot_setter(
+            xlabel="r-space",
+            ylabel="BdG eigenfunction",
+            title="Solution of BdG equation",
+            legendloc="center right")
+
+        nindex = 2
+        Uomega, Uindex = cls.realpositiveomega[nindex]
+        Vomega, Vindex = cls.realnegativeomega[nindex]
+
+        cls.plot_getter(
+            v.R,
+            np.abs(v.Unl[Vindex]),
+            plotlabel="Unl : omega={0}".format(Uomega),
+            showplot=False)
+
+        cls.plot_getter(
+            v.R,
+            np.abs(v.Vnl[Vindex]),
+            plotlabel="Vnl: omega={0}".format(Vomega),
+            showplot=False)
+
+        cls.plot_getter(
+            v.R,
+            np.abs(v.Unlh[nindex]),
+            plotlabel="Unl : omega={0}(Hermite)".format(v.omegah[nindex]))
+
+    @classmethod
+    def procedure(cls, v):
+
+        cls.__solve_bogoliubov_equation(v)
+        cls.__solve_hermite_bogoliubov_equation(v)
+        cls.__set_plot(v)
 
 
 if (__name__ == "__main__"):
 
     var = Variable()
-    GrossPitaevskii.procedure(v=var)
-    AdjointMode.procedure(v=var)
+    GrossPitaevskii.procedure(v=var, showplot=False)
+    AdjointMode.procedure(v=var, showplot=False)
+    Bogoliubov.procedure(v=var)
