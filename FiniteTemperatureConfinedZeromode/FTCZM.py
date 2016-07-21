@@ -6,6 +6,7 @@ import seaborn as sbn
 import numpy as np
 from scipy.linalg import solve
 from scipy.integrate import quad, simps
+from abc import abstractmethod, ABCMeta
 
 
 class Variable(object):
@@ -45,7 +46,83 @@ class Variable(object):
         self.omega, self.U = [None] * 2
 
 
-class GrossPitaevskii(object):
+class PlotWrapper(metaclass=ABCMeta):
+
+    # xcoor : iterable
+    # ycoor : iterable or func
+    # xrange, yrange : 2 element array-like object
+    # xlabel, ylabel, title, linecolor : string
+    # linewidth : integer
+
+    legendloc = None
+
+    @classmethod
+    def plot_setter(cls,
+                    xrange=None,
+                    yrange=None,
+                    xlabel=None,
+                    ylabel=None,
+                    title=None,
+                    legendloc=None):
+
+        if xrange is not None:
+            # set xrange
+            plt.xlim(xrange[0], xrange[1])
+
+        if yrange is not None:
+            # set yrange
+            plt.ylim(yrange[0], yrange[1])
+
+        if xlabel is not None:
+            # set xlabel
+            plt.xlabel(xlabel)
+
+        if ylabel is not None:
+            # set ylabel
+            plt.ylabel(ylabel)
+
+        if title is not None:
+            # set title
+            plt.title(title)
+
+        if legendloc is not None:
+            cls.legendloc = legendloc
+
+    @classmethod
+    def plot_getter(cls,
+                    xcoor,
+                    ycoor,
+                    linecolor=None,
+                    linewidth=2,
+                    plotlabel=None,
+                    plotshow=True):
+        # plot
+        if callable(ycoor):
+            plt.plot(
+                xcoor,
+                ycoor(xcoor),
+                label=plotlabel,
+                color=linecolor,
+                linewidth=linewidth)
+        else:
+            plt.plot(
+                xcoor,
+                ycoor,
+                label=plotlabel,
+                color=linecolor,
+                linewidth=linewidth)
+
+        # show plot data
+        if plotshow:
+            plt.legend(loc=cls.legendloc)
+            plt.show()
+
+    @abstractmethod
+    def __plot_procedure(v):
+        pass
+
+
+class GrossPitaevskii(PlotWrapper):
 
     dt = 0.01
 
@@ -112,29 +189,30 @@ class GrossPitaevskii(object):
         print("")
 
     # Plot xi
-    @staticmethod
-    def __plot_procedure(v):
+    @classmethod
+    def __plot_procedure(cls, v):
 
-        # --*-- Matplotlib configuration --*--
-        #plt.plot(v.R, cls.__psi0(v), label="Initial")
-        plt.plot(v.R, v.xi**2, label="gN = {0}".format(v.GN))
-        plt.plot(v.R, v.R**2 / 2, label="Potential")
-        plt.ylim(0, max(v.xi**2) * 1.1)
-        plt.xlim(0, v.R[-1])
-        plt.xlabel("r-space")
-        plt.ylabel("Order parameter")
-        plt.title("Static vortex of Gross-Pitaevskii equation")
-        plt.legend(loc='center right')
-        plt.show()
+        cls.plot_setter(
+            yrange=(0, max(v.xi**2) * 1.1),
+            xlabel="r-space",
+            ylabel="Order parameter",
+            title="Static solution of Gross-Pitaevskii equation",
+            legendloc="center right")
+
+        cls.plot_getter(
+            v.R, v.xi**2, plotlabel="gN = {0}".format(v.GN), plotshow=False)
+        cls.plot_getter(v.R, v.R**2, plotlabel="Potential")
 
     # Hundle
+
     @classmethod
     def procedure(cls, v):
+
         cls.__solve_imaginarytime_gp(v)
         cls.__plot_procedure(v)
 
 
-class AdjointMode(object):
+class AdjointMode(PlotWrapper):
 
     # Make equation matrix
     @staticmethod
@@ -163,17 +241,16 @@ class AdjointMode(object):
         print("I = {0}".format(v.I))
 
     # Plot eta
-    @staticmethod
-    def __plot_procedure(v):
+    @classmethod
+    def __plot_procedure(cls, v):
 
-        # --*-- Matplotlib configuration --*--
-        plt.plot(v.R, v.eta, label="gN = {0}".format(v.GN))
-        plt.xlim(0, v.R[-1])
-        plt.xlabel("r-space")
-        plt.ylabel("Ajoint parameter")
-        plt.title("Solution of AjointMode equation")
-        plt.legend(loc='center right')
-        plt.show()
+        cls.plot_setter(
+            xlabel="r-space",
+            ylabel="Adjoint parameter",
+            title="Solution of AjointMode equation",
+            legendloc="center right")
+
+        cls.plot_getter(v.R, v.eta, plotlabel="gN = {0}".format(v.GN))
 
     # Hundle
     @classmethod
