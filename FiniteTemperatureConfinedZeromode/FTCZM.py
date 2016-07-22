@@ -8,6 +8,7 @@ from scipy.linalg import solve, eig, eigh
 from scipy.linalg.lapack import dgeev
 from scipy.integrate import quad, simps
 from abc import abstractmethod, ABCMeta
+from tqdm import tqdm
 from pprint import pprint
 
 
@@ -49,7 +50,7 @@ class Variable(object):
         self.omega, self.omegah, self.U = [None] * 3
         # Bogoliubov-de Gennesの固有関数
         self.l = 4
-        self.Unl, self.Vnl, self.Unlh = [[]] * 3
+        self.Unl, self.Vnl, self.Unlh = [[None for _ in range(self.l + 1)]] * 3
         # Bogoliubov-de Gennes行列
         self.T = None
 
@@ -303,18 +304,24 @@ class Bogoliubov(PlotWrapper):
 
         print("--*-- BdG --*--")
         cls.__make_bogoliubov_matrix(v, l=0)
-        v.omega, vr = eig(v.T)
-        v.Unl, v.Vnl = vr.T[:, :v.NR], vr.T[:, v.NR:]
+        pbar = tqdm(range(v.l + 1))
+        for l in pbar:
+            v.omega, vr = eig(v.T)
+            # 要改善
+            v.Unl[l], v.Vnl[l] = vr.T[:, :v.NR], vr.T[:, v.NR:]
+            cls.__update_bogoliubov_matrix(v, l + 1)
+            pbar.set_description("l = {0}".format(l))
 
         realomega = np.real(v.omega)
         realomega = sorted(list(zip(realomega, range(2 * v.NR))))
         cls.realpositiveomega = realomega[v.NR:]
         cls.realnegativeomega = realomega[:v.NR][::-1]
-
+        """
         print("omegaU")
         pprint(cls.realpositiveomega[:5])
         print("omegaV")
         pprint(cls.realnegativeomega[:5])
+        """
 
     @classmethod
     def __set_plot(cls, v):
@@ -331,14 +338,14 @@ class Bogoliubov(PlotWrapper):
 
         cls.plot_getter(
             v.R,
-            np.abs(v.Unl[Vindex]),
-            plotlabel="Unl : omega={0}".format(Uomega),
-            showplot=False)
-
+            np.abs(v.Unl[v.l][Vindex]),
+            plotlabel="Unl : omega={0}".format(Uomega))
+        """
         cls.plot_getter(
             v.R,
-            np.abs(v.Vnl[Vindex]),
+            np.abs(v.Vnl[v.l][Vindex]),
             plotlabel="Vnl: omega={0}".format(Vomega))
+        """
 
     @classmethod
     def procedure(cls, v, showplot=True):
@@ -385,14 +392,20 @@ class HermiteBogoliubov(Bogoliubov):
             plotlabel="Unlh: omega={0}".format(v.omegah[nindex]))
 
     @classmethod
-    def procedure(cls, v):
-        cls.__set_hermite_plot(v)
+    def procedure(cls, v, showplot=True):
+        if (showplot):
+            cls.__set_hermite_plot(v)
 
 
-class ZeroMode(object):
+class ZeroMode(PlotWrapper):
     @staticmethod
     def __set_zeromode_coefficient(v):
-        pass
+
+        v.A = v.G_TILDE * v.N * simps(v.R**2 * v.xi**4, v.R)
+        v.B = v.G_TILDE * v.N * simps(v.R**2 * v.xi**3 * v.eta, v.R)
+        v.C = v.G_TILDE * v.N * simps(v.R**2 * v.xi**2 * v.eta**2, v.R)
+        v.D = v.G_TILDE * v.N * simps(v.R**2 * v.xi * v.eta**3, v.R)
+        v.E = v.G_TILDE * v.N * simps(v.R**2 * v.eta**4, v.R)
 
 
 class QuantumCorrection(PlotWrapper):
@@ -405,4 +418,4 @@ if (__name__ == "__main__"):
     GrossPitaevskii.procedure(v=var, showplot=False)
     AdjointMode.procedure(v=var, showplot=False)
     Bogoliubov.procedure(v=var)
-    HermiteBogoliubov.procedure(v=var)
+    HermiteBogoliubov.procedure(v=var, showplot=False)
