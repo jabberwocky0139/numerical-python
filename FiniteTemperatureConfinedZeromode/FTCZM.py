@@ -48,7 +48,10 @@ class Variable(object):
         # 励起エネルギー ω, 比熱・圧力用の全エネルギー
         self.omega, self.omegah, self.U = [None] * 3
         # Bogoliubov-de Gennesの固有関数
-        self.Unl, self.Vnl, self.Unlh = [None] * 3
+        self.l = 4
+        self.Unl, self.Vnl, self.Unlh = [[]] * 3
+        # Bogoliubov-de Gennes行列
+        self.T = None
 
 
 class PlotWrapper(metaclass=ABCMeta):
@@ -97,7 +100,7 @@ class PlotWrapper(metaclass=ABCMeta):
     def plot_getter(cls,
                     xcoor,
                     ycoor,
-                    linecolor=None,
+                    #linecolor="",
                     linewidth=2,
                     plotlabel=None,
                     showplot=True):
@@ -107,14 +110,14 @@ class PlotWrapper(metaclass=ABCMeta):
                 xcoor,
                 ycoor(xcoor),
                 label=plotlabel,
-                color=linecolor,
+                #color=linecolor,
                 linewidth=linewidth)
         else:
             plt.plot(
                 xcoor,
                 ycoor,
                 label=plotlabel,
-                color=linecolor,
+                #color=linecolor,
                 linewidth=linewidth)
 
         # show plot data
@@ -270,15 +273,12 @@ class Bogoliubov(PlotWrapper):
 
     realpositiveomega, realnegativeomega = [None] * 2
 
-    l = 2
-
     # Make matrix for Bogoliubov-de Gennes equation
     @classmethod
-    def __make_bogoliubov_matrix(cls, v):
+    def __make_bogoliubov_matrix(cls, v, l):
 
-        Ld = np.diag(1 / (2 * v.DR**2) * (2 + cls.l * (cls.l + 1) / v.R**2) +
-                     v.DR**2 * v.R**2 / 2 - v.mu + 2 * v.G_TILDE * (v.xi**2 +
-                                                                    v.Vt))
+        Ld = np.diag(1 / (2 * v.DR**2) * (2 + l * (l + 1) / v.R**2) + v.DR**2 *
+                     v.R**2 / 2 - v.mu + 2 * v.G_TILDE * (v.xi**2 + v.Vt))
 
         Lu = np.diag(-1 / (2 * v.DR**2) * (1 + 1 / np.arange(0, v.NR)))
         Lu = np.vstack((Lu[1:], np.array([0] * v.NR)))
@@ -290,31 +290,20 @@ class Bogoliubov(PlotWrapper):
 
         M = np.diag(2 * v.G_TILDE * (v.xi**2 - v.Va))
 
-        return np.hstack((np.vstack((L, -M)), np.vstack((M, -L))))
+        v.T = np.hstack((np.vstack((L, -M)), np.vstack((M, -L))))
 
     @classmethod
-    def __make_hermite_bogoliubov_matrix(cls, v):
+    def __update_bogoliubov_matrix(cls, v, l):
 
-        Ld = np.diag(1 / (2 * v.DR**2) * (2 + cls.l * (cls.l + 1) / v.R**2) +
-                     v.DR**2 * v.R**2 / 2 - v.mu + 2 * v.G_TILDE * (
-                         v.xi**2 + v.Vt + v.Va / 2))
-
-        Lu = np.diag(-1 / (2 * v.DR**2) * (1 + 1 / np.arange(0, v.NR)))
-        Lu = np.vstack((Lu[1:], np.array([0] * v.NR)))
-
-        Ll = np.diag(-1 / (2 * v.DR**2) * (1 - 1 / np.arange(1, v.NR + 1)))
-        Ll = np.vstack((Ll[1:], np.array([0] * v.NR))).T
-
-        L = Ld + Lu + Ll
-
-        return L
+        Ld = 1 / (2 * v.DR**2) * 2 * l / v.R**2
+        v.T += np.diag(np.r_[Ld, -Ld])
 
     @classmethod
     def __solve_bogoliubov_equation(cls, v):
 
         print("--*-- BdG --*--")
-
-        v.omega, vr = eig(cls.__make_bogoliubov_matrix(v))
+        cls.__make_bogoliubov_matrix(v, l=0)
+        v.omega, vr = eig(v.T)
         v.Unl, v.Vnl = vr.T[:, :v.NR], vr.T[:, v.NR:]
 
         realomega = np.real(v.omega)
@@ -326,16 +315,6 @@ class Bogoliubov(PlotWrapper):
         pprint(cls.realpositiveomega[:5])
         print("omegaV")
         pprint(cls.realnegativeomega[:5])
-
-    @classmethod
-    def __solve_hermite_bogoliubov_equation(cls, v):
-
-        print("--*-- BdG(Hermite) --*--")
-
-        v.omegah, vr = eigh(cls.__make_hermite_bogoliubov_matrix(v))
-        v.Unlh = vr.T
-
-        pprint(v.omegah[:5])
 
     @classmethod
     def __set_plot(cls, v):
@@ -359,20 +338,65 @@ class Bogoliubov(PlotWrapper):
         cls.plot_getter(
             v.R,
             np.abs(v.Vnl[Vindex]),
-            plotlabel="Vnl: omega={0}".format(Vomega),
-            showplot=False)
+            plotlabel="Vnl: omega={0}".format(Vomega))
 
+    @classmethod
+    def procedure(cls, v, showplot=True):
+
+        cls.__solve_bogoliubov_equation(v)
+        if (showplot):
+            cls.__set_plot(v)
+
+
+class HermiteBogoliubov(Bogoliubov):
+    @staticmethod
+    def __make_hermite_bogoliubov_matrix(v, l):
+
+        Ld = np.diag(1 / (2 * v.DR**2) * (2 + l * (l + 1) / v.R**2) + v.DR**2 *
+                     v.R**2 / 2 - v.mu + 2 * v.G_TILDE * (v.xi**2 + v.Vt + v.Va
+                                                          / 2))
+
+        Lu = np.diag(-1 / (2 * v.DR**2) * (1 + 1 / np.arange(0, v.NR)))
+        Lu = np.vstack((Lu[1:], np.array([0] * v.NR)))
+
+        Ll = np.diag(-1 / (2 * v.DR**2) * (1 - 1 / np.arange(1, v.NR + 1)))
+        Ll = np.vstack((Ll[1:], np.array([0] * v.NR))).T
+
+        L = Ld + Lu + Ll
+
+        return L
+
+    @classmethod
+    def __solve_hermite_bogoliubov_equation(cls, v, l):
+
+        print("--*-- BdG(Hermite) --*--")
+
+        v.omegah, vr = eigh(cls.__make_hermite_bogoliubov_matrix(v, l))
+        v.Unlh = vr.T
+
+    @classmethod
+    def __set_hermite_plot(cls, v):
+
+        nindex = 2
+        cls.__solve_hermite_bogoliubov_equation(v, l=0)
         cls.plot_getter(
             v.R,
             np.abs(v.Unlh[nindex]),
-            plotlabel="Unl : omega={0}(Hermite)".format(v.omegah[nindex]))
+            plotlabel="Unlh: omega={0}".format(v.omegah[nindex]))
 
     @classmethod
     def procedure(cls, v):
+        cls.__set_hermite_plot(v)
 
-        cls.__solve_bogoliubov_equation(v)
-        cls.__solve_hermite_bogoliubov_equation(v)
-        cls.__set_plot(v)
+
+class ZeroMode(object):
+    @staticmethod
+    def __set_zeromode_coefficient(v):
+        pass
+
+
+class QuantumCorrection(PlotWrapper):
+    pass
 
 
 if (__name__ == "__main__"):
@@ -381,3 +405,4 @@ if (__name__ == "__main__"):
     GrossPitaevskii.procedure(v=var, showplot=False)
     AdjointMode.procedure(v=var, showplot=False)
     Bogoliubov.procedure(v=var)
+    HermiteBogoliubov.procedure(v=var)
