@@ -20,7 +20,7 @@ class Variable(object):
         # --*-- Constants --*--
 
         # 凝縮粒子数 N, 逆温度 β, 相互作用定数 g
-        self.N0, self.BETA, self.G = 1e5, 1e-1, 1e-3
+        self.N0, self.BETA, self.G = 1e5, 1e1, 1e-3
         self.GN = self.N0 * self.G
         self.G_TILDE = self.GN / (4 * np.pi)
         # プランク定数
@@ -441,10 +441,9 @@ class ZeroMode(PlotWrapper):
         cls.__solve_zeromode_equation(v, dmu)
 
         dedominetor = np.exp(-v.BETA * (v.E0 - v.E0[0]))
-        psi = np.imag(np.conj(v.Psi0[:, :v.NQ - 1]) *
-                      v.Psi0[:, 1:]) * dedominetor.reshape(v.NQ, 1)
-
-        return psi.sum() / dedominetor.sum() / v.DQ
+        psi = np.imag(np.conj(v.Psi0[:, :v.NQ - 1]) * v.Psi0[:, 1:])
+        psi = np.dot(psi.sum(axis=1), dedominetor)
+        return psi / dedominetor.sum() / v.DQ
 
     @classmethod
     # Find proper counter term dmu
@@ -495,18 +494,29 @@ class ZeroMode(PlotWrapper):
 class ZeroModeOperator(PlotWrapper):
 
     @staticmethod
-    def __set_zeromode_expected_value():
+    def __set_zeromode_expected_value(v):
 
         dedominetor = np.exp(-v.BETA * (v.E0 - v.E0[0]))
 
         v.Q2 = (v.Q - v.NQ/2)*v.Psi0*np.conj(v.Psi0)
         v.Q2 = np.dot(v.Q2.sum(axis=1), dedominetor)/dedominetor.sum()*v.DQ**2
-
-        v.P2 = (v.Psi0*np.conj(v.Psi0) - np.real(np.conj(v.Psi0[:, :v.NQ - 1]) *
-                      v.Psi0[:, 1:]))
+        
+        v.P2 = (v.Psi0*np.conj(v.Psi0) - np.real(np.conj(v.Psi0) * np.insert(v.Psi0, v.NQ, 0, axis=1)[:, 1:]))
         v.P2 = 2*np.dot(v.P2.sum(axis=1), dedominetor)/dedominetor.sum()/v.DQ**2
 
-           
+        print(v.Q2, v.P2)
+
+    @classmethod
+    def __output_for_each_interaction(cls, v):
+        pass
+
+    @classmethod
+    def __output_for_each_temperature(cls, v):
+        pass
+
+    @classmethod
+    def procedure(cls, v):
+        cls.__set_zeromode_expected_value(v)
 
 class QuantumCorrection(PlotWrapper):
     pass
@@ -519,4 +529,4 @@ if (__name__ == "__main__"):
     AdjointMode.procedure(v=var, showplot=False)
     Bogoliubov.procedure(v=var, showplot=False)
     ZeroMode.procedure(v=var, showplot=False)
- 
+    ZeroModeOperator.procedure(v=var)
