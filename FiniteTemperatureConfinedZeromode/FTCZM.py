@@ -11,6 +11,10 @@ from scipy import optimize
 from abc import abstractmethod, ABCMeta
 from tqdm import tqdm
 from pprint import pprint
+# Clean up some warnings we know about so as not to scare the users
+import warnings
+from matplotlib.cbook import MatplotlibDeprecationWarning
+warnings.simplefilter('ignore', MatplotlibDeprecationWarning)
 
 
 class Variable(object):
@@ -34,7 +38,7 @@ class Variable(object):
         # 3次元等方r空間
         self.R = np.linspace(self.DR, self.VR, self.NR)
         # q表示における系のサイズ L, ゼロモード空間の分割数 Nq
-        self.L, self.NQ = 20 * (self.N0 * self.VR)**(-1 / 3), 200
+        self.L, self.NQ = 30 * (self.N0 * self.VR)**(-1 / 3), 200
         # q表示においてNq分割 dq
         self.DQ = self.L / self.NQ
         self.Q = np.arange(self.NQ)
@@ -50,7 +54,7 @@ class Variable(object):
         # 積分パラメータ A,B,C,D,E (For Debug?)
         self.A, self.B, self.C, self.D, self.E, self.G = [None] * 6
         # Zeromode Energy, 励起エネルギー ω, 比熱・圧力用の全エネルギー
-        self.E0, self.omega, self.omegah, self.U = [None] * 4
+        self.E0, self.omega, self.omegah, self.U = [[0]] * 4
         # Zeromode Eigenfunction
         self.Psi0 = None
         # Bogoliubov-de Gennesの固有関数
@@ -69,7 +73,7 @@ class PlotWrapper(metaclass=ABCMeta):
     # linewidth : integer
 
     legendloc = None
-
+    
     @classmethod
     def plot_setter(cls,
                     xrange=None,
@@ -129,7 +133,8 @@ class PlotWrapper(metaclass=ABCMeta):
         # show plot data
         if showplot:
             plt.legend(loc=cls.legendloc)
-            plt.show()
+            plt.pause(2.5)
+            #plt.show()
 
     @abstractmethod
     def __plot_procedure(v):
@@ -424,22 +429,27 @@ class ZeroMode(PlotWrapper):
 
     # Solve eigenvalue problem for Zeromode hamiltonian
     @classmethod
-    def __solve_zeromode_equation(cls, v, dmu):
+    def __solve_zeromode_equation(cls, v, dmu, selecteig='v'):
 
+        #print("E0_1 : {0}, select={1}, dmu={2}".format(v.E0, selecteig, dmu))
+        
         # Only ground state
         v.E0, v.Psi0 = eig_banded(
             cls.H0 +
             np.vstack(([0] * v.NQ, [-0.5j * dmu / v.DQ] * v.NQ, [0] * v.NQ)),
             lower=True,
-            select="a",
+            select=selecteig,
+            select_range=(0, v.E0[0] + 5*np.log(10)/v.BETA),
             overwrite_a_band=True)
+        #print("E0_2 : {0}".format(v.E0))
         v.Psi0 = v.Psi0.T
 
     @classmethod
     def __output_expected_value_p(cls, v, dmu):
 
         cls.__solve_zeromode_equation(v, dmu)
-
+        #print("E0_3 : {0}".format(v.E0))
+        
         dedominetor = np.exp(-v.BETA * (v.E0 - v.E0[0]))
         psi = np.imag(np.conj(v.Psi0[:, :v.NQ - 1]) * v.Psi0[:, 1:])
         psi = np.dot(psi.sum(axis=1), dedominetor)
@@ -450,15 +460,18 @@ class ZeroMode(PlotWrapper):
     def __zeromode_self_consistency(cls, v):
 
         cls.__make_zeromode_hamiltonian(v)
+        cls.__solve_zeromode_equation(v, dmu=0)
+
         print("--*-- ZeroMode --*--")
         dmu = optimize.bisect(
-            lambda iterdmu: cls.__output_expected_value_p(v, iterdmu), -1, 1)
+            lambda iterdmu: cls.__output_expected_value_p(v, iterdmu), -0.01, 0.01)
         print("dmu = {0}".format(dmu))
 
     @classmethod
     def __set_plot(cls, v):
 
-        index = 0
+        index = v.E0.size -1
+        print("index : {0}".format(index))
         cls.plot_setter(
             xlabel="ZeroMode-q-space",
             ylabel="ZeroMode eigenfunction",
@@ -466,8 +479,8 @@ class ZeroMode(PlotWrapper):
 
         cls.plot_getter(
             v.Q,
-            np.abs(v.Psi0[index])**2,
-            plotlabel="ZeroMode function : n = {0}".format(index))
+            np.abs(v.Psi0[0])**2,
+            plotlabel="ZeroMode function : n = {0}".format(0))
 
     # For debug
     @classmethod
@@ -504,7 +517,7 @@ class ZeroModeOperator(PlotWrapper):
         v.P2 = (v.Psi0*np.conj(v.Psi0) - np.real(np.conj(v.Psi0) * np.insert(v.Psi0, v.NQ, 0, axis=1)[:, 1:]))
         v.P2 = 2*np.dot(v.P2.sum(axis=1), dedominetor)/dedominetor.sum()/v.DQ**2
 
-        print(v.Q2, v.P2)
+        print("Q2 = {0:1.3e}, P2 = {1:1.3e}".format(v.Q2.real, v.P2.real))
 
     @classmethod
     def __output_for_each_interaction(cls, v):
@@ -518,6 +531,7 @@ class ZeroModeOperator(PlotWrapper):
     def procedure(cls, v):
         cls.__set_zeromode_expected_value(v)
 
+        
 class QuantumCorrection(PlotWrapper):
     pass
 
@@ -528,5 +542,5 @@ if (__name__ == "__main__"):
     GrossPitaevskii.procedure(v=var, showplot=False)
     AdjointMode.procedure(v=var, showplot=False)
     Bogoliubov.procedure(v=var, showplot=False)
-    ZeroMode.procedure(v=var, showplot=False)
+    ZeroMode.procedure(v=var, showplot=True)
     ZeroModeOperator.procedure(v=var)
