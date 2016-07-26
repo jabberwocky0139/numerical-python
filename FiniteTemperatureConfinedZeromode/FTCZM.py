@@ -1,6 +1,7 @@
 # coding: utf-8
 
 import sys
+import math
 import matplotlib.pyplot as plt
 import seaborn as sbn
 import numpy as np
@@ -18,13 +19,12 @@ warnings.simplefilter('ignore', MatplotlibDeprecationWarning)
 
 
 class Variable(object):
-
     def __init__(self):
 
         # --*-- Constants --*--
 
         # 凝縮粒子数 N, 逆温度 β, 相互作用定数 g
-        self.N0, self.BETA, self.G = 1e5, 1e1, 1e-3
+        self.N0, self.BETA, self.G = 1e5, 1e1, 1e-5
         self.GN = self.N0 * self.G
         self.G_TILDE = self.GN / (4 * np.pi)
         # プランク定数
@@ -32,7 +32,7 @@ class Variable(object):
         # 質量 m
         self.M = 1
         # r空間サイズ, 分割数
-        self.VR, self.NR = 50, 300
+        self.VR, self.NR = 50, 500
         # r空間微小幅
         self.DR = self.VR / self.NR
         # 3次元等方r空間
@@ -54,16 +54,16 @@ class Variable(object):
         # 積分パラメータ A,B,C,D,E (For Debug?)
         self.A, self.B, self.C, self.D, self.E, self.G = [None] * 6
         # Zeromode Energy, 励起エネルギー ω, 比熱・圧力用の全エネルギー
-        self.E0,  self.omegah, self.U = [[0]] * 3
-        self.omega = []
+        self.E0, self.omegah, self.U = [[0]] * 3
         # Zeromode Eigenfunction
         self.Psi0 = None
         # Bogoliubov-de Gennesの固有関数
-        self.l = 2
+        self.l = 50
         self.Unl, self.Vnl, self.Unlh = [
-            np.array([None for _ in range(self.l + 1)])] * 3
-        self.realpositiveomega, self.realnegativeomega = [
-            np.array([None for _ in range(self.l + 1)])] * 2
+            np.array([None for _ in range(self.l + 1)])
+        ] * 3
+        self.omega = [None]*(self.l + 1)
+        self.omegah = [None]*(self.l + 1)
         # Bogoliubov-de Gennes行列
         self.T = None
 
@@ -137,7 +137,8 @@ class PlotWrapper(metaclass=ABCMeta):
         # show plot data
         if showplot:
             plt.legend(loc=cls.legendloc)
-            plt.pause(2.5)
+            #plt.pause(2.5)
+            plt.show()
             plt.close("all")
 
     @abstractmethod
@@ -259,7 +260,7 @@ class AdjointMode(PlotWrapper):
         print("--*-- Adjoint --*--")
         etatilde = solve(cls.__make_matrix(v), v.xi)
 
-        v.I = 1 / (2 * v.N0) * (simps(v.R**2 * etatilde * v.xi)) ** -1
+        v.I = 1 / (2 * v.N0) * (simps(v.R**2 * etatilde * v.xi))** -1
         v.eta = v.I * etatilde
         print("I = {0}".format(v.I))
 
@@ -284,6 +285,7 @@ class AdjointMode(PlotWrapper):
             cls.__set_plot(v)
 
 
+# unused as yet
 class Bogoliubov(PlotWrapper):
 
     #realpositiveomega, realnegativeomega = [None] * 2
@@ -324,10 +326,10 @@ class Bogoliubov(PlotWrapper):
             # 要改善？
             v.Unl[l], v.Vnl[l] = vr.T[:, :v.NR], vr.T[:, v.NR:]
 
-            v.omega.append(wr)
-            realomega = np.real(v.omega[l])
-            realomega = sorted(list(zip(realomega, range(2 * v.NR))))
-            v.realpositiveomega[l] = realomega[v.NR:]
+            v.Unl[l], v.Vnl[l] = v.Unl[l][wr.argsort()], v.Vnl[l][wr.argsort()]
+            v.Unl[l], v.Vnl[l] = v.Unl[l][v.NR:], v.Vnl[l][v.NR:]
+            #print(v.Unl[l].shape)
+            v.omega[l] = sorted(np.real(wr))[v.NR:]
 
             cls.__update_bogoliubov_matrix(v, l + 1)
             pbar.set_description("l = {0}".format(l))
@@ -341,18 +343,18 @@ class Bogoliubov(PlotWrapper):
             title="Solution of BdG equation",
             legendloc="center right")
 
-        l, nindex = 2, 1
-        Uomega, Uindex = v.realpositiveomega[l][nindex]
+        l, n = 2, 4
 
         cls.plot_getter(
             v.R,
-            v.Unl[l][Uindex],
-            plotlabel="Unl : omega={0}".format(Uomega), showplot=False)
+            np.real(v.Unl[l][n]),
+            plotlabel="Unl : omega={0}".format(v.omega[l][n]),
+            showplot=False)
 
         cls.plot_getter(
             v.R,
-            v.Vnl[l][Uindex],
-            plotlabel="Vnl : omega={0}".format(Uomega))
+            np.real(v.Vnl[l][n]), plotlabel="Vnl : omega={0}".format(v.omega[l][n]))
+
 
     @classmethod
     def procedure(cls, v, showplot=True):
@@ -362,11 +364,14 @@ class Bogoliubov(PlotWrapper):
             cls.__set_plot(v)
 
 
-# unused as yet
 class HermiteBogoliubov(Bogoliubov):
 
-    @staticmethod
-    def __make_hermite_bogoliubov_matrix(v, l):
+    L = None
+
+    @classmethod
+    def __make_hermite_bogoliubov_matrix(cls, v):
+
+        l = 0
 
         Ld = np.diag(1 / (2 * v.DR**2) * (2 + l * (l + 1) / v.R**2) + v.DR**2 *
                      v.R**2 / 2 - v.mu + 2 * v.G_TILDE * (v.xi**2 + v.Vt + v.Va
@@ -378,27 +383,42 @@ class HermiteBogoliubov(Bogoliubov):
         Ll = np.diag(-1 / (2 * v.DR**2) * (1 - 1 / np.arange(1, v.NR + 1)))
         Ll = np.vstack((Ll[1:], np.array([0] * v.NR))).T
 
-        L = Ld + Lu + Ll
-
-        return L
+        cls.L = Ld + Lu + Ll
 
     @classmethod
-    def __solve_hermite_bogoliubov_equation(cls, v, l):
+    def __update_hermite_bogoliubov_matrix(cls, v, l):
+
+        Ld = 1 / (2 * v.DR**2) * 2 * l / v.R**2
+        cls.L += np.diag(Ld)
+
+    @classmethod
+    def __solve_hermite_bogoliubov_equation(cls, v):
 
         print("--*-- BdG(Hermite) --*--")
+        cls.__make_hermite_bogoliubov_matrix(v)
 
-        v.omegah, vr = eigh(cls.__make_hermite_bogoliubov_matrix(v, l))
-        v.Unlh = vr.T
+        pbar = tqdm(range(v.l + 1))
+        for l in pbar:
+            v.omegah[l], vr = eigh(cls.L)
+            v.Unlh[l] = vr.T
+            cls.__update_hermite_bogoliubov_matrix(v, l+1)
+            pbar.set_description("l = {0}".format(l))
+
 
     @classmethod
     def __set_hermite_plot(cls, v):
 
-        nindex = 2
-        cls.__solve_hermite_bogoliubov_equation(v, l=0)
-        cls.plot_getter(
-            v.R,
-            np.abs(v.Unlh[nindex]),
-            plotlabel="Unlh: omega={0}".format(v.omegah[nindex]))
+        n, l = 0, 0
+
+        cls.__solve_hermite_bogoliubov_equation(v)
+        print(v.omegah[l])
+        for l in range(4):
+            cls.plot_getter(
+                v.R,
+                np.real(v.Unlh[l][n]),
+                plotlabel="Unlh: omega={0}".format(v.omegah[l][n]), showplot=False)
+        plt.legend()
+        plt.show()
 
     @classmethod
     def procedure(cls, v, showplot=True):
@@ -430,8 +450,10 @@ class ZeroMode(PlotWrapper):
         alpha = 3 * v.E / v.DQ**4 + (v.I - 4 * v.D) / v.DQ**2 + 2 * v.C * (v.Q - v.NQ / 2.0)**2 - \
             2 * v.DQ**2 * v.B * (v.Q - v.NQ / 2.0)**2 + \
             0.5 * v.DQ**4 * v.A * (v.Q - v.NQ / 2.0)**4
-        beta = -2 * v.E / v.DQ**4 + 2.0j * v.D / v.DQ**3 - 0.5 * (v.I - 4 * v.D) / v.DQ**2 - 0.5j * (
-            dmu + 4 * v.C) / v.DQ - (v.C - 1j * v.DQ * v.B) * (v.Q - v.NQ / 2) * (v.Q - v.NQ / 2 + 1)
+        beta = -2 * v.E / v.DQ**4 + 2.0j * v.D / v.DQ**3 - 0.5 * (
+            v.I - 4 * v.D) / v.DQ**2 - 0.5j * (dmu + 4 * v.C) / v.DQ - (
+                v.C - 1j * v.DQ * v.B) * (v.Q - v.NQ / 2) * (v.Q - v.NQ / 2 + 1
+                                                             )
         gamma = [0.5 * v.E / v.DQ**4 - 1j * v.D / v.DQ**3] * v.NQ
 
         cls.H0 = np.vstack((alpha, beta, gamma))
@@ -444,8 +466,8 @@ class ZeroMode(PlotWrapper):
 
         # Only ground state
         v.E0, v.Psi0 = eig_banded(
-            cls.H0 +
-            np.vstack(([0] * v.NQ, [-0.5j * dmu / v.DQ] * v.NQ, [0] * v.NQ)),
+            cls.H0 + np.vstack(
+                ([0] * v.NQ, [-0.5j * dmu / v.DQ] * v.NQ, [0] * v.NQ)),
             lower=True,
             select=selecteig,
             select_range=(0, v.E0[0] + 5 * np.log(10) / v.BETA),
@@ -465,6 +487,7 @@ class ZeroMode(PlotWrapper):
         return psi / dedominetor.sum() / v.DQ
 
     @classmethod
+
     # Find proper counter term dmu
     def __zeromode_self_consistency(cls, v):
 
@@ -473,7 +496,8 @@ class ZeroMode(PlotWrapper):
 
         print("--*-- ZeroMode --*--")
         dmu = optimize.bisect(
-            lambda iterdmu: cls.__output_expected_value_p(v, iterdmu), -0.01, 0.01)
+            lambda iterdmu: cls.__output_expected_value_p(v, iterdmu), -0.01,
+            0.01)
         print("dmu = {0}".format(dmu))
 
     @classmethod
@@ -494,7 +518,6 @@ class ZeroMode(PlotWrapper):
     # For debug
     @classmethod
     def __output_dmu_p(cls, v):
-
         cls.__make_zeromode_hamiltonian(v)
         p = []
         iterdmu = np.linspace(-1, 1, 100)
@@ -514,7 +537,6 @@ class ZeroMode(PlotWrapper):
 
 
 class ZeroModeOperator(PlotWrapper):
-
     @staticmethod
     def __set_zeromode_expected_value(v):
 
@@ -524,8 +546,9 @@ class ZeroModeOperator(PlotWrapper):
         v.Q2 = np.dot(v.Q2.sum(axis=1), dedominetor) / \
             dedominetor.sum() * v.DQ**2
 
-        v.P2 = (v.Psi0 * np.conj(v.Psi0) - np.real(np.conj(v.Psi0)
-                                                   * np.insert(v.Psi0, v.NQ, 0, axis=1)[:, 1:]))
+        v.P2 = (v.Psi0 * np.conj(v.Psi0) - np.real(
+            np.conj(v.Psi0) * np.insert(
+                v.Psi0, v.NQ, 0, axis=1)[:, 1:]))
         v.P2 = 2 * np.dot(v.P2.sum(axis=1), dedominetor) / \
             dedominetor.sum() / v.DQ**2
 
@@ -545,30 +568,17 @@ class ZeroModeOperator(PlotWrapper):
 
 
 class QuantumCorrection(PlotWrapper):
+    pass
 
-    @classmethod
-    def __set_quantum_correction(cls, v):
-
-        U2, V2 = 0, 0
-        
-        for l in range(v.l):
-            omega = np.array(sorted(np.real(v.omega[l]))[v.NR:])
-            pprint(omega)
-            nnl = (np.exp(v.BETA*omega) - 1)**-1
-            v.Unl[l]
-            
-
-    @classmethod
-    def procedure(cls, v):
-        cls.__set_quantum_correction(v)
-        
 
 if (__name__ == "__main__"):
 
     var = Variable()
     GrossPitaevskii.procedure(v=var, showplot=False)
     AdjointMode.procedure(v=var, showplot=False)
-    Bogoliubov.procedure(v=var, showplot=False)
+    #Bogoliubov.procedure(v=var, showplot=True)
+    HermiteBogoliubov.procedure(v=var, showplot=True)
     ZeroMode.procedure(v=var, showplot=False)
     ZeroModeOperator.procedure(v=var)
-    QuantumCorrection.procedure(v=var)
+    #QuantumCorrection.procedure(v=var)
+
