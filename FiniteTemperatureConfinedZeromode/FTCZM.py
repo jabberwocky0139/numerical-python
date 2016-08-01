@@ -52,6 +52,7 @@ class Variable(object):
         # 化学ポテンシャル μ, 秩序変数 ξ, 共役モード η, 共役モードの規格化変数 I
         self.mu, self.xi, self.eta, self.I = mu, xi, 0, 0
         self.promu, self.proI = [1] * 2
+        self.Nc, self.Ntot = 0, 0
         # 熱平均, 異常平均
         self.Vt = np.array([0 for _ in range(self.NR)])
         self.Va = np.array([0 for _ in range(self.NR)])
@@ -66,13 +67,14 @@ class Variable(object):
         # Zeromode Eigenfunction
         self.Psi0 = None
         # Bogoliubov-de Gennesの固有関数
-        self.l = 14
+        self.l = 13
         self.Unlh = [np.array([None for _ in range(self.l + 1)])]
         self.Unl, self.Vnl = np.array([]), np.array([])
         self.omega = [None] * (self.l + 1)
         self.omegah = [None] * (self.l + 1)
         # Bogoliubov-de Gennes行列
         self.T = None
+        self.S = None
 
 
 class PlotWrapper(metaclass=ABCMeta):
@@ -301,7 +303,7 @@ class AdjointMode(PlotWrapper):
 
         cls.plot_getter(v.R, v.eta, plotlabel="gN = {0}".format(v.GN))
 
-# Hundle
+# Handle
 
     @classmethod
     def procedure(cls, v, showplot=True):
@@ -311,7 +313,6 @@ class AdjointMode(PlotWrapper):
             cls.__set_plot(v)
 
 
-# unused as yet
 class Bogoliubov(PlotWrapper):
 
     #realpositiveomega, realnegativeomega = [None] * 2
@@ -426,6 +427,126 @@ class Bogoliubov(PlotWrapper):
         if (showplot):
             cls.__set_plot(v)
 
+class BogoliubovSMatrix(PlotWrapper):
+
+    L, M = [None]*2
+
+    # Make matrix for Bogoliubov-de Gennes equation
+    @classmethod
+    def __make_bogoliubov_matrix(cls, v, l):
+
+        e1 = -0.5 / v.DR**2
+
+        Ld = np.diag(-2 * e1 + l * (l + 1) / v.R**2 / 2 + v.R**2 / 2 - v.mu + 2 * v.G_TILDE * (v.xi**2 + v.Vt))
+
+
+        Lu = np.diag([e1] * v.NR)
+        Lu = np.vstack((Lu[1:], np.array([0] * v.NR)))
+        
+        Ll = np.diag([e1] * v.NR)
+        Ll = np.vstack((Ll[1:], np.array([0] * v.NR))).T
+        
+        cls.L = Ld + Lu + Ll
+        
+        cls.M = np.diag(v.G_TILDE * (v.xi**2 - v.Va))
+        
+        v.S = np.dot(cls.L - cls.M, cls.L + cls.M)
+        
+    @classmethod
+    def __solve_bogoliubov_equation(cls, v):
+
+        # 初期化
+        v.Vt, v.Va = 0, 0
+
+        print("--*-- BdG (Smat) --*--")
+
+        for l in range(v.l + 1):
+            cls.__make_bogoliubov_matrix(v, l)
+            
+            wr, vl, vr = eig(v.S, left=True)
+            
+            Y,  Z = vr.T[wr.argsort()], vl.T[wr.argsort()]
+            omega2 = np.array(sorted(np.real(wr)))
+
+            # 固有値 omega が0.1以下のモードは捨てる
+            for index1, iter_omega in enumerate(omega2):
+                if (np.sqrt(iter_omega) < 0.1):
+                    continue
+                break
+
+            # 固有値 omega が200以上のモードは捨てる
+            for index2, iter_omega in enumerate(omega2):
+                if (np.sqrt(iter_omega) < 200):
+                    continue
+                break
+
+            omega2 = omega2[index1:index2]
+            omega = np.sqrt(omega2)
+            Y, Z = Y[index1:index2], Z[index1:index2]
+            
+            c1 = []
+            for z, y in zip(Z, Y):
+                c = np.dot(cls.L - cls.M, z)
+                c1.append(np.abs(np.dot(c, np.conj(y))))
+            c1 = np.array(c1)
+
+            index = omega.shape[0]
+            U, V = Y*c1.reshape(index, 1) + Z*omega.reshape(index, 1), Y*c1.reshape(index, 1) - Z*omega.reshape(index, 1)
+            
+            # 規格化係数
+            norm2 = simps(U**2 - V**2, v.R)
+            coo = (2 * l + 1) / norm2 / v.N0
+            
+            ndist = (np.exp(v.BETA * omega) - 1)** -1
+            if(v.Temp < 1e-7):
+                ndist = np.array([0]*index)
+
+            tmpVt = ((U**2 + V**2) * ndist.reshape(index, 1) + V**2) * coo.reshape(index, 1)
+            tmpVt = tmpVt.T.sum(axis=1)
+            v.Vt += tmpVt / v.R**2
+
+            tmpVa = (2 * U * V * ndist.reshape(index, 1) + U * V) * coo.reshape(index, 1)
+            tmpVa = tmpVa.T.sum(axis=1)
+            v.Va += tmpVa / v.R**2
+
+            sys.stdout.write("\rl = {0}".format(l))
+            sys.stdout.flush()
+        print(", BdG_Va : {0:1.6f}, omega_low : {1:1.4f}, omega_high : {2:1.4f}, omega_len : {3}".format(v.Va[0], omega[0], omega[-1], omega.shape[0]))
+
+
+    @classmethod
+    def __set_plot(cls, v):
+
+        cls.plot_setter(
+            xlabel="r-space",
+            ylabel="BdG eigenfunction",
+            title="Solution of BdG equation",
+            legendloc="center right")
+
+        l, n = 2, 1
+        for l in [2, 4]:
+            cls.plot_getter(
+                v.R,
+                np.real(v.Unl[l][n]),
+                plotlabel="Unl : omega={0}".format(v.omega[l][n]),
+                showplot=False)
+
+            cls.plot_getter(
+                v.R,
+                np.real(v.Vnl[l][n]),
+                plotlabel="Vnl : omega={0}".format(v.omega[l][n]),
+                showplot=False)
+
+        plt.legend()
+        plt.show()
+
+    @classmethod
+    def procedure(cls, v, showplot=True):
+
+        cls.__solve_bogoliubov_equation(v)
+        if (showplot):
+            cls.__set_plot(v)
+
 
 class ZeroMode(PlotWrapper):
 
@@ -491,6 +612,7 @@ class ZeroMode(PlotWrapper):
         cls.__solve_zeromode_equation(v, dmu)
 
         dedominetor = np.exp(-v.BETA * v.E0)
+        
         psi = np.imag(np.conj(v.Psi0[:, :v.NQ - 1]) * v.Psi0[:, 1:])
         psi = np.dot(psi.sum(axis=1), dedominetor)
 
@@ -504,10 +626,9 @@ class ZeroMode(PlotWrapper):
     def __zeromode_self_consistency(cls, v):
 
         cls.__make_zeromode_band(v)
-        #cls.__make_zeromode_matrix(v)
 
         print("--*-- ZeroMode --*--")
-        dmu = optimize.brentq(lambda iterdmu: cls.__output_expected_value_p(v, iterdmu), -0.2, 0.2)
+        dmu = optimize.brentq(lambda iterdmu: cls.__output_expected_value_p(v, iterdmu), -0.1, 0.1)
         print(", dmu = {0}, E0_len = {1}".format(dmu, v.E0.shape[0]))
 
     @classmethod
@@ -541,26 +662,14 @@ class ZeroMode(PlotWrapper):
     def __set_zeromode_expected_value(cls, v):
 
         dedominator = np.exp(-v.BETA * v.E0)
-
+        
         v.Q2 = (v.Q - v.NQ / 2)**2 * v.Psi0 * np.conj(v.Psi0)
         v.Q2 = np.dot(v.Q2.sum(axis=1), dedominator) / dedominator.sum() * v.DQ**2
 
-        #v.P2 = v.Psi0 * np.conj(v.Psi0) - np.real(np.conj(v.Psi0) * np.insert(v.Psi0, v.NQ, 0, axis=1)[:, 1:])
-        #v.P2 = 2 * np.dot(v.P2.sum(axis=1), dedominator) / dedominator.sum() / v.DQ**2
-
-        ans = 0
-        dedom = 0
-        for m in range(len(v.E0)):
-            for q in range(v.NQ-1):
-                ans += (v.Psi0[m][q]*np.conj(v.Psi0[m][q]) - np.real(np.conj(v.Psi0[m][q])*v.Psi0[m][q+1]))*np.exp(-v.BETA*v.E0[m])
-            ans += v.Psi0[m][v.NQ-1]*np.conj(v.Psi0[m][v.NQ-1])*np.exp(-v.BETA*v.E0[m])
-            dedom += np.exp(-v.BETA*v.E0[m])
-        ans *= 2/v.DQ**2/dedom
-
-        v.P2 = ans
-
+        v.P2 = v.Psi0 * np.conj(v.Psi0) - np.real(np.conj(v.Psi0) * np.insert(v.Psi0, v.NQ, 0, axis=1)[:, 1:])
+        v.P2 = 2 * np.dot(v.P2.sum(axis=1), dedominator) / dedominator.sum() / v.DQ**2
+        
         v.Vt += np.real(v.xi**2 * v.Q2 + v.eta**2 * v.P2 - v.xi * v.eta)
-
         v.Va += np.real(-v.xi**2 * v.Q2 + v.eta**2 * v.P2)
 
         print("Q2 = {0:1.3e}, P2 = {1:1.3e}".format(v.Q2.real, v.P2.real))
@@ -573,6 +682,25 @@ class ZeroMode(PlotWrapper):
         if (showplot):
             cls.__set_plot(v)
 
+            
+class ParticleNumbers(object):
+
+    @classmethod
+    def __set_total_particle_number(cls, v):
+        
+        v.Nc = np.real(v.N0*(1 + v.Q2) + v.G**2*v.P2 - 0.5)
+        v.Ntot = np.real(v.Nc + v.N0*simps(v.R**2*v.Vt, v.R))
+        
+        v.Temp = (v.Ntot / special.zeta(3, 1))**(1 / 3) * 0.1
+        v.BETA = 1 / v.Temp
+
+    @classmethod
+    def procedure(cls, v):
+
+        cls.__set_total_particle_number(v)
+        
+    
+
 class IZMFSolver(object):
 
     @classmethod
@@ -580,26 +708,27 @@ class IZMFSolver(object):
         print("--*-- live score : {0} times --*--".format(i))
         print("Vt : {0}..., Va : {1}...".format(var.Vt[:3], var.Va[:3]))
         print("I : {0}".format(var.I))
-        print("dmu : {0}, dI : {1}, dQ2 : {2}, dP2 : {3}\n".format(abs(var.promu - var.mu), abs(var.I-var.proI), abs(var.Q2**0.5 - var.proQ2**0.5), abs(var.P2**0.5 - var.proP2**0.5)))
+        print("N0 : {0}, Nc : {1}, Ntot : {2}".format(var.N0, var.Nc, var.Ntot))
+        print("dmu : {0}, dI : {1}, dQ2 : {2}, dP2 : {3}\n".format(abs(var.promu - var.mu), abs(var.I - var.proI), abs(var.Q2**0.5 - var.proQ2**0.5), abs(var.P2**0.5 - var.proP2**0.5)))
 
     @classmethod
     def procedure(cls):
-
+        
         with open("output.txt", "w") as f:
-
-            print("# G\t Q2\t P2", file=f, flush=True)
+            
+            print("# G\t Q2\t P2\t Ntot : T = 0.1", file=f, flush=True)
 
             for index, a_s in enumerate(np.logspace(-4, -1, num=20)[0:]):
 
-                print("\n\n |--------------------------------------|")
-                print(" |---*--- a_s = {0:1.3e}, n = {1} ---*---|".format(a_s, index))
-                print(" |--------------------------------------|\n")
+                print("\n\n |---------------------------------------|")
+                print(" |---*--- a_s = {0:1.3e}, n = {1:2d} ---*---|".format(a_s, index))
+                print(" |---------------------------------------|\n")
 
 
                 if(index==0):
-                    var = Variable(G=4*np.pi*a_s)
+                    var = Variable(G=4*np.pi*a_s, T=0.1)
                 else:
-                    var = Variable(G=4*np.pi*a_s, xi=var.xi, mu=var.mu)
+                    var = Variable(G=4*np.pi*a_s, xi=var.xi, mu=var.mu, T=0.1)
 
                 i = 0
                 while (abs(var.P2**0.5 - var.proP2**0.5) > 1e-2):
@@ -611,8 +740,9 @@ class IZMFSolver(object):
                     else:
                         GrossPitaevskii.procedure(v=var, showplot=False)
                     AdjointMode.procedure(v=var, showplot=False)
-                    Bogoliubov.procedure(v=var, showplot=False)
+                    BogoliubovSMatrix.procedure(v=var, showplot=False)
                     ZeroMode.procedure(v=var, showplot=False)
+                    ParticleNumbers.procedure(v=var)
                     cls.__print_data(var, i)
                     i += 1
 
@@ -620,9 +750,7 @@ class IZMFSolver(object):
                 plt.pause(2)
                 plt.close("all")
 
-                print("{0}\t{1}\t{2}".format(a_s, var.Q2.real, var.P2.real), file=f, flush=True)
-
-
+                print("{0}\t{1}\t{2}\t{3}".format(a_s, var.Q2.real, var.P2.real, var.Ntot), file=f, flush=True)
 
 
 if (__name__ == "__main__"):
