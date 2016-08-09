@@ -10,14 +10,13 @@ import csv
 #plt_file3 = "output_T1e-2.txt"
 
 #plt_file_arr_g = ["output_T1e-1.txt", "output_T-2.txt", "output_T1e-3.txt", "output_T1e-4.txt"]
-plt_file_arr_g = ["for T/output_T0.txt", "for T/output_T1e-3.txt", "for T/output_T1e-2.txt", "for T/output_T5e-2.txt", "for T/output_T1e-1.txt"]
+#plt_file_arr_g = ["for T/output_T0.txt", "for T/output_T1e-3.txt", "for T/output_T1e-2.txt", "for T/output_T5e-2.txt", "for T/output_T1e-1.txt"]
 #plt_file_arr_g = ["output_T1e-3.txt"]
-#plt_file_arr_T = ["output_g1e-4.txt"]
-plt_file_arr_T = ["for g/output_g1e-4.txt", "for g/output_g1e-1.txt", "for g/output_g1e-2.txt", "for g/output_g1e-3.txt"]
+plt_file_arr_T = ["output_g1e-4.txt", "output_g1e-3.txt"]
+#plt_file_arr_T = ["output_g1e-4.txt", "output_g1e-1.txt", "output_g1e-2.txt", "output_g1e-3.txt"]
 
 
-g, T = [], []
-Q2, P2, Ntot, Cv, U, Nc = [[[] for _ in range(6)] for _ in range(6)]
+g, T, Q2, P2, Ntot, Cv, U, Nc, J, MJ = [[[] for _ in range(6)] for _ in range(10)]
 
 #which = "g"
 which = "T"
@@ -35,15 +34,21 @@ for index, plt_file in enumerate(iterable):
         next(reader)
 
         for row in reader:
+            """
             if (index == 0):
                 g.append(float(row[0]))
                 T.append(float(row[1]))
+            """
+            g[index].append(float(row[0]))
+            T[index].append(float(row[1]))
             Q2[index].append(float(row[2]))
             P2[index].append(float(row[3]))
             Ntot[index].append(float(row[4]))
             U[index].append(float(row[5]))
             Cv[index].append(float(row[6]))
             Nc[index].append(float(row[8]))
+            J[index].append(float(row[9]))
+            MJ[index].append(float(row[10]))
 
 # Plot of Q2
 plt.subplot(2, 2, 1)
@@ -51,7 +56,7 @@ plt.subplot(2, 2, 1)
 if(which == "T"):
     for i in range(len(plt_file_arr_T)):
         #plt.plot(T, np.sqrt(Q2[i]), ".", linewidth=3)
-        plt.plot(T, np.sqrt(Q2[i]), linewidth=3)
+        plt.plot(T[i], np.sqrt(Q2[i]), linewidth=3)
     plt.xlim(1e-3, 5e-1)
     plt.ylim(0, 0.5)
     plt.xlabel(r"$T$")
@@ -60,7 +65,7 @@ if(which == "T"):
 elif(which == "g"):
     for i in range(len(plt_file_arr_g)):
         #plt.plot(g, np.sqrt(Q2[i]), ".", linewidth=3)
-        plt.plot(g, np.sqrt(Q2[i]), linewidth=3)
+        plt.plot(g[i], np.sqrt(Q2[i]), linewidth=3)
     plt.xlim(1e-4, 1e-1)
     plt.ylim(0.05, 0.5)
     plt.xlabel(r"$g$")
@@ -81,7 +86,7 @@ plt.subplot(2, 2, 3)
 if(which == "T"):
     for i in range(len(plt_file_arr_T)):
         #plt.plot(T, np.sqrt(P2[i]), ".", linewidth=3)
-        plt.plot(T, np.sqrt(P2[i]), linewidth=3)
+        plt.plot(T[i], np.sqrt(P2[i]), linewidth=3)
     plt.xlim(1e-3, 5e-1)
     plt.ylim(0, 120)
     plt.xlabel(r"$T$")
@@ -90,7 +95,7 @@ if(which == "T"):
 elif(which == "g"):
     for i in range(len(plt_file_arr_g)):
         #plt.plot(g, np.sqrt(P2[i]), ".", linewidth=3)
-        plt.plot(g, np.sqrt(P2[i]), linewidth=3)
+        plt.plot(g[i], np.sqrt(P2[i]), linewidth=3)
     plt.xlim(1e-4, 1e-1)
     plt.ylim(5, 100)
     plt.xlabel(r"$g$")
@@ -111,7 +116,7 @@ if(which == "g"):
     for i in range(len(plt_file_arr_g)):
         if(i == 0):
             continue
-        plt.plot(g, 1 - np.array(Nc[i])/np.array(Ntot[i]), linewidth=3)
+        plt.plot(g[i], 1 - np.array(Nc[i])/np.array(Ntot[i]), linewidth=3)
     plt.xlabel(r"$g$")
     plt.ylabel(r"${\rm depletion}\ \ \ 1 - N_0/N$")
     plt.xlim(1e-4, 1e-1)
@@ -126,15 +131,25 @@ if(which == "T"):
 # Plot of depletion
 plt.subplot(2, 2, 4)
 if(which == "T"):
+    J1, J2 = [], []
     for i in range(len(plt_file_arr_T)):
-        plt.plot(T, Cv[i], linewidth=3)
-
+        #plt.plot(T, U[i], linewidth=3)
+        #plt.plot(T[:len(T)-1] , (np.array(U[i][1:]) - np.array(U[i][:len(U[i])-1]))/(np.array(T[1:]) - np.array(T[:len(T)-1]))/np.array(Ntot[i][:len(Ntot[i])-1]), ".", linewidth=3)
+        # 2階微分. 読みづらい.
+        J1.append((np.array(J[i][1:]) - np.array(J[i][:len(J[i])-1]))/(np.array(T[i][1:]) - np.array(T[i][:len(T[i])-1])))
+        plt.plot(T[i][:len(T[i])-2] , -np.array(T[i][:len(T[i])-2])*((np.array(J1[i][1:]) - np.array(J1[i][:len(J1[i])-1]))/(np.array(T[i][2:]) - np.array(T[i][:len(T[i])-2]))/np.array(Ntot[i][:len(Ntot[i])-2])), "--", linewidth=3)
+        J2.append((np.array(MJ[i][1:]) - np.array(MJ[i][:len(MJ[i])-1]))/(np.array(T[i][1:]) - np.array(T[i][:len(T[i])-1])))
+        plt.plot(T[i][:len(T[i])-2] , -np.array(T[i][:len(T[i])-2])*((np.array(J2[i][1:]) - np.array(J2[i][:len(J2[i])-1]))/(np.array(T[i][2:]) - np.array(T[i][:len(T[i])-2]))/np.array(Ntot[i][:len(Ntot[i])-2])), linewidth=3)
+        
+        #np.array(Ntot[i][:len(Ntot[i])-2])
+        
     plt.xlabel(r"$T$")
-    plt.ylabel(r"${\rm Specific heat}$")
+    plt.ylabel(r"${\rm Specific\ heat}$")
     plt.xlim(1e-3, 5e-1)
     plt.ylim(1e-6, 1e1)
     plt.yscale("log")
     plt.xscale("log")
     plt.yticks([1e-6, 1e-4, 1e-2, 1e0], [r"$10^{-6}$", r"$10^{-4}$", r"$10^{-2}$", r"$10^{0}$"])
+
 
 plt.show()

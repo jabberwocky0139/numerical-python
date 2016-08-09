@@ -74,7 +74,8 @@ class Variable(object):
         # Bogoliubov-de Gennesの固有関数
         self.l = 14
         # 系の内部エネルギー, 比熱
-        self.Energy, self.Specific = 0, 0
+        self.Energy, self.Specific, self.Thermodynamic, self.ModifiedThermodynamic = [0]*4
+        self.tMT1, self.tMT2, self.tMT3, self.tMT4, self.tMT5 = [0]*5
         # Bogoliubov-de Gennes行列
         self.T = None
         self.S = None
@@ -349,7 +350,8 @@ class BogoliubovSMatrix(PlotWrapper):
     def __solve_bogoliubov_equation(cls, v):
 
         # 初期化
-        v.Vt, v.Va, v.Energy, v.Specific = [0]*4
+        v.Vt, v.Va, v.Energy, v.Specific, v.Thermodynamic, v.ModifiedThermodynamic, v.tmpModifiedThermodynamic = [0]*7
+        v.tMT1, v.tMT2, v.tMT3, v.tMT4, v.tMT5 = [0]*5
 
         print("--*-- BdG (Smat) --*--")
 
@@ -385,31 +387,60 @@ class BogoliubovSMatrix(PlotWrapper):
             c1 = np.array(c1)
 
             index = omega.shape[0]
-            U, V = Y*c1.reshape(index, 1) + Z*omega.reshape(index, 1), Y*c1.reshape(index, 1) - Z*omega.reshape(index, 1)
+            # Utilde, VtildeではなくU, Vを求める
+            U, V = (Y*c1.reshape(index, 1) + Z*omega.reshape(index, 1)) / v.R, (Y*c1.reshape(index, 1) - Z*omega.reshape(index, 1)) / v.R
 
-            # 規格化係数
-            norm2 = simps(U**2 - V**2, v.R)
-            coo = (2 * l + 1) / norm2 / v.N0
+            # 規格化係数. Utilde, VtildeではなくU, V
+            norm2 = simps(v.R**2*(U**2 - V**2), v.R)
+            U /= np.sqrt(norm2).reshape(index, 1)
+            V /= np.sqrt(norm2).reshape(index, 1)
+            # 規格化 + l依存性 + N0で割りましょう
+            coo = (2 * l + 1) / v.N0
 
+            # BE分布
             ndist = (np.exp(v.BETA * omega) - 1)** -1
+            # ゼロ温度なら励起を取り入れないので分布をゼロにしてしまう. 
             if(v.Temp < 1e-7):
                 ndist = np.array([0]*index)
 
-            tmpVt = ((U**2 + V**2) * ndist.reshape(index, 1) + V**2) * coo.reshape(index, 1)
+            # 各励起ごとにndistとcooを掛ける
+            tmpVt = ((U**2 + V**2) * ndist.reshape(index, 1) + V**2) * coo
+            tmpVa = (2 * U * V * ndist.reshape(index, 1) + U * V) * coo
+            # 各励起ごとに和を取る. 
             tmpVt = tmpVt.T.sum(axis=1)
-            v.Vt += tmpVt / v.R**2
-
-            tmpVa = (2 * U * V * ndist.reshape(index, 1) + U * V) * coo.reshape(index, 1)
             tmpVa = tmpVa.T.sum(axis=1)
-            v.Va += tmpVa / v.R**2
+            # U, Vの定義から必要. 
+            v.Vt += tmpVt
+            v.Va += tmpVa
+            # ModifiedThermodynamicのZeromode交差項
+            tVa = (2 * U * V * ndist.reshape(index, 1) + U * V)
+            tVa = tVa.T.sum(axis=1)
+            tVt = ((U**2 + V**2) * ndist.reshape(index, 1) + V**2)
+            tVt = tVt.T.sum(axis=1)
+            v.tMT1 += 4*np.pi*v.G_TILDE*(2*l + 1)*simps(v.R**2 * v.xi**2 * tVa, v.R)
+            v.tMT2 += 4*np.pi*v.G_TILDE*(2*l + 1)*simps(v.R**2 * v.eta**2 * tVa, v.R)
+            v.tMT3 += 8*np.pi*v.G_TILDE*(2*l + 1)*simps(v.R**2 * v.xi**2 * tVt, v.R)
+            v.tMT4 += 8*np.pi*v.G_TILDE*(2*l + 1)*simps(v.R**2 * v.eta**2 * tVt, v.R)
+            v.tMT5 += 8*np.pi*v.G_TILDE*(2*l + 1)*simps(v.R**2 * v.xi*v.eta * tVt, v.R)
+            # ModifiedThermodynamicの相互作用項
+            tMTi1 = U**2 * ndist.reshape(index, 1)
+            tMTi2 = (V**2 * ndist.reshape(index, 1) + V**2)
+            tMTi3 = (2*U*V * ndist.reshape(index, 1) + U*V)
+            tMTi1 = (tMTi1.T.sum(axis=1))**2
+            tMTi2 = (tMTi2.T.sum(axis=1))**2
+            tMTi3 = (tMTi3.T.sum(axis=1))**2
+            tMTi4 = np.sqrt(tMTi1*tMTi2)
 
-            v.Energy += (2*l + 1)*np.dot(omega, ndist)/v.N0
-            v.Specific += (2*l + 1)**2*np.dot(omega**2, (np.exp(v.BETA * omega) + np.exp(-v.BETA * omega) - 2)**-1)/v.Temp**2/v.N0
+            v.Energy += (2*l + 1) * np.dot(omega, ndist)
+            #v.Specific += (2*l + 1)**2*np.dot(omega**2, (np.exp(v.BETA * omega) + np.exp(-v.BETA * omega) - 2)**-1)/v.Temp**2/v.N0
+            v.Thermodynamic += -(2*l + 1) * v.Temp*np.log((1-np.exp(-v.BETA*omega))**-1).sum()
+            v.ModifiedThermodynamic += -v.tMT5.real + v.G_TILDE * (2*l + 1)**2 / (2*v.N0) * simps(v.R**2 * (2*tMTi1.real + 2*tMTi2.real + tMTi3.real + 4*tMTi4.real), v.R)
 
             sys.stdout.write("\rl = {0}".format(l))
             sys.stdout.flush()
         print(", BdG_Va : {0:1.6f}, omega_low : {1:1.4f}, omega_high : {2:1.4f}, omega_len : {3}".format(v.Va[0], omega[0], omega[-1], omega.shape[0]))
         print("Energy : {0}, Cv : {1}".format(v.Energy, v.Specific))
+        print("MTP : {0}".format(v.ModifiedThermodynamic))
 
 
     @classmethod
@@ -612,16 +643,17 @@ class ZeroMode(PlotWrapper):
         v.Vt += np.real(v.xi**2 * v.Q2.real + v.eta**2 * v.P2.real - v.xi * v.eta)
         v.Va += np.real(-v.xi**2 * v.Q2.real + v.eta**2 * v.P2.real)
 
-        psi2E0 = np.real(v.Psi0*np.conj(v.Psi0)*v.E0.reshape(v.E0.size, 1))
-        psi2E02 = np.real(v.Psi0*np.conj(v.Psi0)*v.E0.reshape(v.E0.size, 1)**2)
-
-        #v.Energy += np.dot(v.E0, dedominator) / dedominator.sum()
-        #v.Specific += (np.dot(v.E0**2, dedominator)/ dedominator.sum() - (np.dot(v.E0, dedominator) / dedominator.sum())**2)/v.Temp**2
-        v.Energy += np.dot(psi2E0.sum(axis=1), dedominator) / dedominator.sum()
-        v.Specific += (np.dot(psi2E02.sum(axis=1), dedominator)/ dedominator.sum() - (np.dot(psi2E0.sum(axis=1), dedominator) / dedominator.sum())**2)/v.Temp**2/100
         v.L = np.sqrt(v.Q2.real) * 25
         v.DQ = v.L/v.NQ
 
+        psi2E0 = np.real(v.Psi0*np.conj(v.Psi0)*v.E0.reshape(v.E0.size, 1))
+        psi2E02 = np.real(v.Psi0*np.conj(v.Psi0)*v.E0.reshape(v.E0.size, 1)**2)
+
+        v.Energy += np.dot(psi2E0.sum(axis=1), dedominator) / dedominator.sum()
+        v.Thermodynamic += -v.Temp*np.log(np.exp(-v.BETA*v.E0).sum())
+        v.ModifiedThermodynamic += v.Q2.real*(-v.tMT1 + v.tMT3) + v.P2.real*(v.tMT2 + v.tMT4)
+        
+        print("tMT1 : {0}, tMT2 : {1}, tMT3 : {2}, tMT4 : {3}".format(v.tMT1, v.tMT2, v.tMT3, v.tMT4))
         print("Q2 = {0:1.3e}, P2 = {1:1.3e}".format(v.Q2.real, v.P2.real))
 
     @classmethod
@@ -673,7 +705,8 @@ class IZMFSolver(object):
         print("I : {0}".format(var.I))
         print("N0 : {0}, Nc : {1}, Ntot : {2}".format(var.N0, var.Nc, var.Ntot))
         print("Energy : {0}, Cv : {1}".format(var.Energy, var.Specific))
-        print("dmu : {0}, dI : {1}, dQ2 : {2}, dP2 : {3}\n".format(abs(var.promu - var.mu), abs(var.I - var.proI), abs(var.Q2**0.5 - var.proQ2**0.5), abs(var.P2**0.5 - var.proP2**0.5)))
+        print("dmu : {0}, dI : {1}, dQ2 : {2}, dP2 : {3}".format(abs(var.promu - var.mu), abs(var.I - var.proI), abs(var.Q2**0.5 - var.proQ2**0.5), abs(var.P2**0.5 - var.proP2**0.5)))
+        print("TP : {0}, MTP : {1}\n".format(var.Thermodynamic, var.ModifiedThermodynamic))
 
     @classmethod
     def procedure(cls, filename, iterable, TTc, a_s, which):
@@ -681,7 +714,7 @@ class IZMFSolver(object):
         with open(filename, "w") as f:
 
             cls.TTc, cls.a_s = TTc, a_s
-            print("# g\t T\t Q2\t P2\t Ntot\t Energy\t Cv\t beta\t Nc", file=f, flush=True)
+            print("# g\t T\t Q2\t P2\t Ntot\t Energy\t Cv\t beta\t Nc\t ThermoPot\t ModifiedTP", file=f, flush=True)
 
 
             for index, physicalparameter in enumerate(iterable):
@@ -718,141 +751,18 @@ class IZMFSolver(object):
                     ParticleNumbers.procedure(v=var, T=cls.TTc)
                     cls.__print_data(var, i)
                     i += 1
-                """
-                plt.plot(var.Q, np.abs(var.Psi0[0]))
-                plt.plot(var.Q, np.abs(var.Psi0[1]))
-                plt.plot(var.Q, np.abs(var.Psi0[var.NM-1]))
-                plt.pause(2)
-                plt.close("all")
-                """
 
-                print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}".format(cls.a_s, cls.TTc, var.Q2.real, var.P2.real, var.Ntot, var.Energy, var.Specific, var.BETA, var.Nc), file=f, flush=True)
+                print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}".format(cls.a_s, cls.TTc, var.Q2.real, var.P2.real, var.Ntot, var.Energy, var.Specific, var.BETA, var.Nc, var.Thermodynamic, var.Thermodynamic + var.ModifiedThermodynamic), file=f, flush=True)
 
 
 if (__name__ == "__main__"):
 
-    for fn, g in zip(["1e-4", "1e-3", "1e-2", "1e-1"], [1e-4, 1e-3, 1e-2, 1e-1]):
-    #for fn, g in zip(["1e-4"], [1e-4]):
-        IZMFSolver.procedure(filename="output_g{0}.txt".format(fn), iterable=np.logspace(-3, -1 + np.log10(5), num=20), TTc=1e-3, a_s=g, which="T")
+    #for fn, g in zip(["1e-4", "1e-3", "1e-2", "1e-1"], [1e-4, 1e-3, 1e-2, 1e-1]):
+    for fn, g in zip(["1e-3"], [1e-3]):
+        IZMFSolver.procedure(filename="output_g{0}.txt".format(fn), iterable=np.logspace(-3, -1 + np.log10(7), num=40), TTc=1e-3, a_s=g, which="T")
+        #IZMFSolver.procedure(filename="output_g{0}.txt".format(fn), iterable=np.linspace(1e-3, 5e-1, num=30), TTc=1e-3, a_s=g, which="T")
 
-    for fn, T in zip(["0", "1e-3", "1e-2", "5e-2", "1e-1"], [1e-8, 1e-3, 1e-2, 5e-2, 1e-1]):
+    #for fn, T in zip(["0", "1e-3", "1e-2", "5e-2", "1e-1"], [1e-8, 1e-3, 1e-2, 5e-2, 1e-1]):
     #for fn, T in zip(["1e-3"], [1e-3]):
-        IZMFSolver.procedure(filename="output_T{0}.txt".format(fn), iterable=np.logspace(-4, -1, num=20), TTc=T, a_s=1e-4, which="g")
+    #    IZMFSolver.procedure(filename="output_T{0}.txt".format(fn), iterable=np.logspace(-4, -1, num=20), TTc=T, a_s=1e-4, which="g")
 
-
-
-"""
-class Bogoliubov(PlotWrapper):
-
-    #realpositiveomega, realnegativeomega = [None] * 2
-
-    # Make matrix for Bogoliubov-de Gennes equation
-    @classmethod
-    def __make_bogoliubov_matrix(cls, v, l):
-
-        e1 = -0.5 / v.DR**2
-
-        Ld = np.diag(-2 * e1 + l * (l + 1) / v.R**2 / 2 + v.R**2 / 2 - v.mu + 2 * v.G_TILDE * (v.xi**2 + v.Vt))
-
-        Lu = np.diag([e1] * v.NR)
-        Lu = np.vstack((Lu[1:], np.array([0] * v.NR)))
-
-        Ll = np.diag([e1] * v.NR)
-        Ll = np.vstack((Ll[1:], np.array([0] * v.NR))).T
-
-        L = Ld + Lu + Ll
-
-        M = np.diag(v.G_TILDE * (v.xi**2 - v.Va))
-
-        v.T = np.hstack((np.vstack((L, -M)), np.vstack((M, -L))))
-
-    @classmethod
-    def __update_bogoliubov_matrix(cls, v, l):
-
-        Ld = l / v.R**2
-        v.T += np.diag(np.r_[Ld, -Ld])
-
-    @classmethod
-    def __solve_bogoliubov_equation(cls, v):
-
-        # 初期化
-        v.Vt, v.Va = 0, 0
-
-        print("--*-- BdG --*--")
-        cls.__make_bogoliubov_matrix(v, l=0)
-
-        for l in range(v.l + 1):
-            wr, vr = eig(v.T)
-            U, V = vr.T[:, :v.NR], vr.T[:, v.NR:]
-            # 固有値の順にソート, 正の固有値のみ取り出す
-            U, V = U[wr.argsort()][v.NR:], V[wr.argsort()][v.NR:]
-            omega = np.array(sorted(np.real(wr))[v.NR:])
-
-            # 固有値 omega が0.1以下のモードは捨てる
-            for index1, iter_omega in enumerate(omega):
-                if (iter_omega < 0.1):
-                    continue
-                break
-
-            # 固有値 omega が300以上のモードは捨てる
-            for index2, iter_omega in enumerate(omega):
-                if (iter_omega < 200):
-                    continue
-                break
-
-            omega = omega[index1:index2]
-            U, V = U[index1:index2], V[index1:index2]
-
-            # 規格化係数
-            norm2 = simps(np.array(U)**2 - np.array(V)**2, v.R)
-            coo = (2 * l + 1) / norm2 / v.N0
-
-            ndist = (np.exp(v.BETA * omega) - 1)** -1
-
-            tmpVt = ((U**2 + V**2) * ndist.reshape(omega.shape[0], 1) + V**2) * coo.reshape(omega.shape[0], 1)
-            tmpVt = tmpVt.T.sum(axis=1)
-            v.Vt += tmpVt / v.R**2
-
-            tmpVa = (2 * U * V * ndist.reshape(omega.shape[0], 1) + U * V) * coo.reshape(omega.shape[0], 1)
-            tmpVa = tmpVa.T.sum(axis=1)
-            v.Va += tmpVa / v.R**2
-
-            cls.__update_bogoliubov_matrix(v, l + 1)
-            sys.stdout.write("\rl = {0}".format(l))
-            sys.stdout.flush()
-        print(", BdG_Va : {0:1.6f}, omega_low : {1:1.4f}, omega_high : {2:1.4f}, omega_len : {3}".format(v.Va[0], omega[0], omega[-1], omega.shape[0]))
-
-
-    @classmethod
-    def __set_plot(cls, v):
-
-        cls.plot_setter(
-            xlabel="r-space",
-            ylabel="BdG eigenfunction",
-            title="Solution of BdG equation",
-            legendloc="center right")
-
-        l, n = 2, 1
-        for l in [2, 4]:
-            cls.plot_getter(
-                v.R,
-                np.real(U[n]),
-                plotlabel="U : omega={0}".format(omega[n]),
-                showplot=False)
-
-            cls.plot_getter(
-                v.R,
-                np.real(V[n]),
-                plotlabel="V : omega={0}".format(omega[n]),
-                showplot=False)
-
-        plt.legend()
-        plt.show()
-
-    @classmethod
-    def procedure(cls, v, showplot=True):
-
-        cls.__solve_bogoliubov_equation(v)
-        if (showplot):
-            cls.__set_plot(v)
-"""
