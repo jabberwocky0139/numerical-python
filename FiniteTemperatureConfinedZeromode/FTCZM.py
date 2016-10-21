@@ -23,7 +23,7 @@ class Variable(object):
 
         # --*-- Constants --*--
 
-        # 凝縮粒子数 N, 逆温度 β, 相互作用定数 g
+        # condensate-particle number N0, inverse temperature β, interaction constant g
         self.N0, self.G = N0, G
         self.TTc = TTc
         self.Temp = (self.N0 / special.zeta(3, 1))**(1 / 3) * TTc
@@ -35,48 +35,44 @@ class Variable(object):
 
         self.GN = self.N0 * self.G
         self.G_TILDE = self.GN / (4 * np.pi)
-        # プランク定数
-        self.H_BAR = 1
-        # 質量 m
-        self.M = 1
-        # r空間サイズ, 分割数
+        # r-space size VR, division number NR
         self.VR, self.NR = 10, 300
-        # r空間微小幅
+        # r-space deltaR
         self.DR = self.VR / self.NR
-        # 3次元等方r空間
+        # 3D r-space
         self.R = np.linspace(self.DR, self.VR, self.NR)
-        # q表示における系のサイズ L, ゼロモード空間の分割数 Nq
+        # Zeromode-space volume L, division number Nq
         self.L, self.NQ = 20 * (self.N0)**(-1 / 3), 600
         self.NM = self.NQ * 1 / 3
-        # q表示においてNq分割 dq
+        # q-space deltaQ
         self.DQ = self.L / self.NQ
         self.Q = np.arange(self.NQ)
 
         # --*-- Variables --*--
 
-        # 化学ポテンシャル μ, 秩序変数 ξ, 共役モード η, 共役モードの規格化変数 I
+        # chemical potential μ, order parameter ξ, adjoint mode η, Normalize constant of adjoint mode I
         self.mu, self.xi, self.eta, self.I = mu, xi, 0, 0
         self.promu, self.proI = [1] * 2
         self.Nc, self.Ntot = 0, 0
-        # 熱平均, 異常平均
+        # thermal averave Vt, anomarous average Va
         self.Vt = np.array([0 for _ in range(self.NR)])
         self.Va = np.array([0 for _ in range(self.NR)])
 
-        # Pの平均 <P>, Q^2の平均 <Q^2>, P^2の平均 <P^2>
+        # average of P, Q**2, P**2
         self.P, self.Q2, self.P2 = [0] * 3
         self.proQ2, self.proP2 = 1, 1
-        # 積分パラメータ A,B,C,D,E (For Debug?)
+        # integral parameter A,B,C,D,E
         self.A, self.B, self.C, self.D, self.E, self.G = [None] * 6
-        # Zeromode Energy, 励起エネルギー ω, 比熱・圧力用の全エネルギー
+        # Zeromode Energy, BdG excitation energy ω, internal energy
         self.E0, self.omegah, self.U = [[0]] * 3
         # Zeromode Eigenfunction
         self.Psi0 = None
-        # Bogoliubov-de Gennesの固有関数
+        # eigen function number of Bogoliubov-de Gennes
         self.l = 14
-        # 系の内部エネルギー, 比熱
+        # internal energy, pecific heat, thermodynamic potential
         self.Energy, self.Specific, self.Thermodynamic, self.ModifiedThermodynamic = [0]*4
         self.tMT1, self.tMT2, self.tMT3, self.tMT4, self.tMT5 = [0]*5
-        # Bogoliubov-de Gennes行列
+        # Bogoliubov-de Gennes matrix
         self.T = None
         self.S = None
         self.dmu = dmu
