@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sbn
 import csv
-
 #plt_file1 = "output_T1e-1.txt"
 #plt_file2 = "output_T5e-2.txt"
 #plt_file3 = "output_T1e-2.txt"
