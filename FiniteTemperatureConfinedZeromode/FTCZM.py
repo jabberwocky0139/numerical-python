@@ -70,7 +70,7 @@ class Variable(object):
         # eigen function number of Bogoliubov-de Gennes
         self.l = 14
         # internal energy, pecific heat, thermodynamic potential
-        self.Energy, self.Specific, self.Thermodynamic, self.ModifiedThermodynamic = [0]*4
+        self.Energy, self.Specific, self.Thermodynamic, self.ModifiedThermodynamic, self.LeeYangEnergy = [0]*5
         self.tMT1, self.tMT2, self.tMT3, self.tMT4, self.tMT5 = [0]*5
         # Bogoliubov-de Gennes matrix
         self.T = None
@@ -346,8 +346,13 @@ class BogoliubovSMatrix(PlotWrapper):
     def __solve_bogoliubov_equation(cls, v):
 
         # 初期化
-        v.Vt, v.Va, v.Energy, v.Specific, v.Thermodynamic, v.ModifiedThermodynamic, v.tmpModifiedThermodynamic = [0]*7
+        v.Vt, v.Va, v.Energy, v.Specific, v.Thermodynamic, v.ModifiedThermodynamic, v.tmpModifiedThermodynamic, v.LeeYangEnergy = [0]*8
         v.tMT1, v.tMT2, v.tMT3, v.tMT4, v.tMT5 = [0]*5
+
+        # LeeYangEnergyの初期化
+        xi_2dot = -0.5 * np.gradient(np.gradient(v.xi, v.DR), v.DR)
+        #v.LeeYangEnergy += v.mu * v.N0 / 2 + simps(v.R**2 * xi_2dot * v.xi, v.R) / 2
+        print("LeeYang1 : ", v.LeeYangEnergy)
 
         print("--*-- BdG (Smat) --*--")
 
@@ -384,10 +389,10 @@ class BogoliubovSMatrix(PlotWrapper):
 
             index = omega.shape[0]
             # Utilde, VtildeではなくU, Vを求める
-            U, V = (Y*c1.reshape(index, 1) + Z*omega.reshape(index, 1)) / v.R, (Y*c1.reshape(index, 1) - Z*omega.reshape(index, 1)) / v.R
+            U, V = (Y * c1.reshape(index, 1) + Z * omega.reshape(index, 1)) / v.R, (Y * c1.reshape(index, 1) - Z * omega.reshape(index, 1)) / v.R
 
             # 規格化係数. Utilde, VtildeではなくU, V
-            norm2 = simps(v.R**2*(U**2 - V**2), v.R)
+            norm2 = simps(v.R**2 * (U**2 - V**2), v.R)
             U /= np.sqrt(norm2).reshape(index, 1)
             V /= np.sqrt(norm2).reshape(index, 1)
             # 規格化 + l依存性 + N0で割りましょう
@@ -431,6 +436,19 @@ class BogoliubovSMatrix(PlotWrapper):
             #v.Specific += (2*l + 1)**2*np.dot(omega**2, (np.exp(v.BETA * omega) + np.exp(-v.BETA * omega) - 2)**-1)/v.Temp**2/v.N0
             v.Thermodynamic += -(2*l + 1) * v.Temp*np.log((1-np.exp(-v.BETA*omega))**-1).sum()
             v.ModifiedThermodynamic += -v.tMT5.real + v.G_TILDE * (2*l + 1)**2 / (2*v.N0) * simps(v.R**2 * (2*tMTi1.real + 2*tMTi2.real + tMTi3.real + 4*tMTi4.real), v.R)
+
+            # LeeYangEnergyの計算(やばい)
+            U_2dot = -0.5 * np.array(np.gradient(np.gradient(U, v.DR)[1], v.R)[1])
+            V_2dot = -0.5 * np.array(np.gradient(np.gradient(V, v.DR)[1], v.R)[1])
+            U2_int = simps(v.R**2 * U**2, v.R)
+            U2_dot_int = simps(v.R**2 * U * U_2dot, v.R)
+            V2_int = simps(v.R**2 * V**2, v.R)
+            V2_dot_int = simps(v.R**2 * V * V_2dot, v.R)
+
+            v.LeeYangEnergy += (((omega.reshape(index, 1) - v.mu) * U2_int + U2_dot_int) * ndist.reshape(index, 1) - ((omega.reshape(index, 1) + v.mu) * V2_int - V2_dot_int) * (1 + ndist.reshape(index, 1))).sum() * coo / 2
+
+
+            
 
             sys.stdout.write("\rl = {0}".format(l))
             sys.stdout.flush()
@@ -645,9 +663,9 @@ class ZeroMode(PlotWrapper):
         psi2E0 = np.real(v.Psi0*np.conj(v.Psi0)*v.E0.reshape(v.E0.size, 1))
         psi2E02 = np.real(v.Psi0*np.conj(v.Psi0)*v.E0.reshape(v.E0.size, 1)**2)
 
-        v.Energy += np.dot(psi2E0.sum(axis=1), dedominator) / dedominator.sum()
-        v.Thermodynamic += -v.Temp*np.log(np.exp(-v.BETA*v.E0).sum())
-        v.ModifiedThermodynamic += v.Q2.real*(-v.tMT1 + v.tMT3) + v.P2.real*(v.tMT2 + v.tMT4)
+        #v.Energy += np.dot(psi2E0.sum(axis=1), dedominator) / dedominator.sum() # debug
+        #v.Thermodynamic += -v.Temp*np.log(np.exp(-v.BETA*v.E0).sum())
+        #v.ModifiedThermodynamic += v.Q2.real*(-v.tMT1 + v.tMT3) + v.P2.real*(v.tMT2 + v.tMT4)
         
         print("tMT1 : {0}, tMT2 : {1}, tMT3 : {2}, tMT4 : {3}".format(v.tMT1, v.tMT2, v.tMT3, v.tMT4))
         print("Q2 = {0:1.3e}, P2 = {1:1.3e}".format(v.Q2.real, v.P2.real))
@@ -702,7 +720,8 @@ class IZMFSolver(object):
         print("N0 : {0}, Nc : {1}, Ntot : {2}".format(var.N0, var.Nc, var.Ntot))
         print("Energy : {0}, Cv : {1}".format(var.Energy, var.Specific))
         print("dmu : {0}, dI : {1}, dQ2 : {2}, dP2 : {3}".format(abs(var.promu - var.mu), abs(var.I - var.proI), abs(var.Q2**0.5 - var.proQ2**0.5), abs(var.P2**0.5 - var.proP2**0.5)))
-        print("TP : {0}, MTP : {1}\n".format(var.Thermodynamic, var.ModifiedThermodynamic))
+        print("TP : {0}, MTP : {1}, LeeYang : {2}\n".format(var.Thermodynamic, var.ModifiedThermodynamic, var.LeeYangEnergy))
+
 
     @classmethod
     def procedure(cls, filename, iterable, TTc, a_s, which):
@@ -710,7 +729,7 @@ class IZMFSolver(object):
         with open(filename, "w") as f:
 
             cls.TTc, cls.a_s = TTc, a_s
-            print("# g\t T\t Q2\t P2\t Ntot\t Energy\t Cv\t beta\t Nc\t ThermoPot\t ModifiedTP", file=f, flush=True)
+            print("# g\t T\t Q2\t P2\t Ntot\t Energy\t Cv\t beta\t Nc\t ThermoPot\t ModifiedTP\t LeeYang", file=f, flush=True)
 
 
             for index, physicalparameter in enumerate(iterable):
@@ -748,17 +767,17 @@ class IZMFSolver(object):
                     cls.__print_data(var, i)
                     i += 1
 
-                print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}".format(cls.a_s, cls.TTc, var.Q2.real, var.P2.real, var.Ntot, var.Energy, var.Specific, var.BETA, var.Nc, var.Thermodynamic, var.Thermodynamic + var.ModifiedThermodynamic), file=f, flush=True)
+                print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}".format(cls.a_s, cls.TTc, var.Q2.real, var.P2.real, var.Ntot, var.Energy, var.Specific, var.BETA, var.Nc, var.Thermodynamic, var.Thermodynamic + var.ModifiedThermodynamic, var.LeeYangEnergy), file=f, flush=True)
 
 
-if (__name__ == "__main__"):
+if __name__ == "__main__":
 
     #for fn, g in zip(["1e-4", "1e-3", "1e-2", "1e-1"], [1e-4, 1e-3, 1e-2, 1e-1]):
-    for fn, g in zip(["1e-3"], [1e-3]):
-        IZMFSolver.procedure(filename="output_g{0}.txt".format(fn), iterable=np.logspace(-3, -1 + np.log10(7), num=40), TTc=1e-3, a_s=g, which="T")
+    #for fn, g in zip(["1e-3"], [1e-3]):
+    #    IZMFSolver.procedure(filename="output_g{0}.txt".format(fn), iterable=np.logspace(-3, -1 + np.log10(7), num=40), TTc=1e-3, a_s=g, which="T")
         #IZMFSolver.procedure(filename="output_g{0}.txt".format(fn), iterable=np.linspace(1e-3, 5e-1, num=30), TTc=1e-3, a_s=g, which="T")
 
-    #for fn, T in zip(["0", "1e-3", "1e-2", "5e-2", "1e-1"], [1e-8, 1e-3, 1e-2, 5e-2, 1e-1]):
+    for fn, T in zip(["0", "1e-3", "1e-2", "5e-2", "1e-1"], [1e-8, 1e-3, 1e-2, 5e-2, 1e-1]):
     #for fn, T in zip(["1e-3"], [1e-3]):
-    #    IZMFSolver.procedure(filename="output_T{0}.txt".format(fn), iterable=np.logspace(-4, -1, num=20), TTc=T, a_s=1e-4, which="g")
+        IZMFSolver.procedure(filename="output_T{0}.txt".format(fn), iterable=np.logspace(-4, -1, num=20), TTc=T, a_s=1e-4, which="g")
 

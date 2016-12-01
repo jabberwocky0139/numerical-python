@@ -8,17 +8,17 @@ import csv
 #plt_file2 = "output_T5e-2.txt"
 #plt_file3 = "output_T1e-2.txt"
 
-#plt_file_arr_g = ["output_T1e-1.txt", "output_T-2.txt", "output_T1e-3.txt", "output_T1e-4.txt"]
-plt_file_arr_g = ["for T/output_T0.txt", "for T/output_T1e-3.txt", "for T/output_T1e-2.txt", "for T/output_T5e-2.txt", "for T/output_T1e-1.txt"]
+plt_file_arr_g = ["output_T0.txt", "output_T1e-3.txt", "output_T1e-2.txt", "output_T5e-2.txt", "output_T1e-1.txt"]
+#plt_file_arr_g = ["for T/output_T0.txt", "for T/output_T1e-3.txt", "for T/output_T1e-2.txt", "for T/output_T5e-2.txt", "for T/output_T1e-1.txt"]
 #plt_file_arr_g = ["output_T1e-3.txt"]
 #plt_file_arr_T = ["output_g1e-4.txt", "output_g1e-3.txt"]
 plt_file_arr_T = ["for g/output_g1e-1.txt", "for g/output_g1e-2.txt", "for g/output_g1e-3.txt", "for g/output_g1e-4.txt"]
 
 
-g, T, Q2, P2, Ntot, Cv, U, Nc, J, MJ = [[[] for _ in range(6)] for _ in range(10)]
+g, T, Q2, P2, Ntot, Cv, U, Nc, J, MJ, LY = [[[] for _ in range(6)] for _ in range(11)]
 
-#which = "g"
-which = "T"
+which = "g"
+#which = "T"
 
 if(which=="T"):
     iterable = plt_file_arr_T
@@ -48,6 +48,7 @@ for index, plt_file in enumerate(iterable):
             Nc[index].append(float(row[8]))
             #J[index].append(float(row[9]))
             #MJ[index].append(float(row[10]))
+            #LY[index].append(float(row[11]))
 
 
 # Plot of Q2
@@ -152,7 +153,16 @@ if(which == "T"):
     plt.yscale("log")
     plt.xscale("log")
     plt.yticks([1e-6, 1e-4, 1e-2, 1e0], [r"$10^{-6}$", r"$10^{-4}$", r"$10^{-2}$", r"$10^{0}$"])
-
+else:
+    for i, temp in zip(range(len(plt_file_arr_g)), [0, 0.001, 0.01, 0.05, 0.1]):
+        #plt.plot(g, np.sqrt(P2[i]), ".", linewidth=3)
+        plt.plot(g[i], U[i], linewidth=3, label="$T/T_c$ = {0}".format(temp), color=plt.cm.jet(i/5))
+    plt.xlim(1e-4, 1e-1)
+    plt.ylim(1e-4, 1)
+    plt.xlabel(r"$g$", fontsize=18)
+    plt.xscale("log")
+    plt.yscale("log")
+    #plt.yticks([5, 10, 20, 50, 100], [5, 10, 20, 50, 100])
 
 plt.legend(loc = 'left')
 #plt.legend()
