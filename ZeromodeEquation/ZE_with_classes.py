@@ -61,10 +61,10 @@ class Procedures(metaclass=ABCMeta):
         alpha = P2_a + Q4_a # debug
         
         #beta = -2 * v.E / v.dq**4 + 2.0j * v.D / v.dq**3 - 0.5 * (v.I - 4 * v.D) / v.dq**2 - 0.5j * (dmu + 4 * v.C) / v.dq - (v.C - 1j * v.dq * v.B) * (v.q - v.Nq / 2) * (v.q - v.Nq / 2 + 1)
-        beta = P2_b + P_b + QPQ_b # debug
+        beta = [P2_b + P_b + P3_b] * v.Nq # debug
         
         #gamma = [0.5 * v.E / v.dq**4 - 1j * v.D / v.dq**3] * v.Nq
-        gamma = [0] * v.Nq # debug
+        gamma = [P3_g] * v.Nq # debug
         
         return np.vstack((np.vstack((alpha, beta)), gamma))
 
@@ -174,10 +174,10 @@ class OutputZeromodeGroundFunction(Procedures):
         val = val.T[0]
 
         print(w[1]-w[0], '\r', end='')
-        #f = open('qpq_energy_N.txt', 'a')
+        f = open('p3_energy_N.txt', 'a')
         # for index, value in enumerate(np.diff(w)):
         #     print('{0}\t{1}'.format(index, value), file=f)
-        #print('{0}\t{1}'.format(v.N, w[1] - w[0]), file=f)
+        print('{0}\t{1}'.format(v.N, w[1] - w[0]), file=f)
         
         # self.SetPlot(
         #     plot_x=v.q,
@@ -241,8 +241,7 @@ if __name__ == "__main__":
     #     Zero.Procedure(N)
     f = open('variational_energy_N', 'w')
     for N in range(50000, 500000, 10000):
-        print('{0}\t{1}'.format(N, 0.84 * (10**-3 / (4*np.pi))**0.4 * N**(1.0/15)), file=f)
-        #Zero.Procedure(N)
+        Zero.Procedure(N)
 
     
     # plt.plot(range(5000, 50000, 100), plot_imag, label='imaginary part')
