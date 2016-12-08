@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import seaborn as sbn
 from abc import abstractmethod, ABCMeta
 
+# plot container
+plot_real, plot_imag = [], []
 
 # --*-- Constants' and variables' class --*--
 class Variables():
@@ -37,6 +39,7 @@ class Variables():
         self.dq = self.L / self.Nq
         # Zeromode q-space coordinate
         self.q = np.arange(self.Nq)
+        
 
 
 # --*-- Basis class --*--
@@ -44,17 +47,25 @@ class Procedures(metaclass=ABCMeta):
 
     # Make Zeromode hamiltonian(Lower triangle)
     def __MakeZeromodeHamiltonian(self, v, dmu):
-
-        alpha = 3 * v.E / v.dq**4 + (v.I - 4 * v.D) / v.dq**2 + 2 * v.C * (
-            v.q - v.Nq / 2.0)**2 - 2 * v.dq**2 * v.B * (
-                v.q - v.Nq / 2.0)**2 + 0.5 * v.dq**4 * v.A * (v.q - v.Nq / 2.0
-                                                              )**4
-        beta = -2 * v.E / v.dq**4 + 2.0j * v.D / v.dq**3 - 0.5 * (
-            v.I - 4 * v.D) / v.dq**2 - 0.5j * (dmu + 4 * v.C) / v.dq - (
-                v.C - 1j * v.dq * v.B) * (v.q - v.Nq / 2) * (v.q - v.Nq / 2 + 1
-                                                             )
-        gamma = [0.5 * v.E / v.dq**4 - 1j * v.D / v.dq**3] * v.Nq
-
+        """debug: P**4 + Q**2 のみを残した子"""
+        P_b = - 0.5j * (dmu + 4 * v.C) / v.dq
+        P2_a, P2_b = (v.I - 4 * v.D) / v.dq**2, - 0.5 * (v.I - 4 * v.D) / v.dq**2
+        P3_b, P3_g = 2.0j * v.D / v.dq**3, - 1j * v.D / v.dq**3
+        P4_a, P4_b, P4_g = 3 * v.E / v.dq**4, -2 * v.E / v.dq**4, 0.5 * v.E / v.dq**4
+        Q2_a = - 2 * v.dq**2 * v.B * (v.q - v.Nq / 2.0)**2
+        Q4_a = 0.5 * v.dq**4 * v.A * (v.q - v.Nq / 2.0)**4
+        QPQ_b = 1j * v.dq * v.B * (v.q - v.Nq / 2) * (v.q - v.Nq / 2 + 1)
+        QP2Q_a, QP2Q_b = 2 * v.C * (v.q - v.Nq / 2.0)**2, -v.C * (v.q - v.Nq / 2) * (v.q - v.Nq / 2 + 1)
+        
+        #alpha = 3 * v.E / v.dq**4 + (v.I - 4 * v.D) / v.dq**2 + 2 * v.C * (v.q - v.Nq / 2.0)**2 - 2 * v.dq**2 * v.B * (v.q - v.Nq / 2.0)**2 + 0.5 * v.dq**4 * v.A * (v.q - v.Nq / 2.0)**4
+        alpha = P2_a + Q4_a # debug
+        
+        #beta = -2 * v.E / v.dq**4 + 2.0j * v.D / v.dq**3 - 0.5 * (v.I - 4 * v.D) / v.dq**2 - 0.5j * (dmu + 4 * v.C) / v.dq - (v.C - 1j * v.dq * v.B) * (v.q - v.Nq / 2) * (v.q - v.Nq / 2 + 1)
+        beta = P2_b + P_b + QPQ_b # debug
+        
+        #gamma = [0.5 * v.E / v.dq**4 - 1j * v.D / v.dq**3] * v.Nq
+        gamma = [0] * v.Nq # debug
+        
         return np.vstack((np.vstack((alpha, beta)), gamma))
 
     # Solve eigenvalue problem for Zeromode hamiltonian
@@ -65,16 +76,17 @@ class Procedures(metaclass=ABCMeta):
             Hqp,
             lower=True,
             select="i",
-            select_range=(0, 0),
+            select_range=(0, 50),
             overwrite_a_band=True)
-        val = val.reshape(v.Nq)
+        
+        #val = val.reshape(v.Nq)
 
-        return val
+        return w, val
 
     # Output expected value of Zeromode operator P
     def OutputP(self, v, dmu):
-        val = self.ZeromodeEquation(v, dmu)
-
+        _, val = self.ZeromodeEquation(v, dmu)
+        val = val.T[0]
         # Check boundary value of Zeromode q-space
         if (np.abs(val[0]) > 0.01):
             print("warning!!!")
@@ -83,8 +95,7 @@ class Procedures(metaclass=ABCMeta):
 
     # Find proper counter term dmu
     def SelfConsistent(self, v):
-        dmu = optimize.bisect(lambda pro_dmu: self.OutputP(v, pro_dmu), -1e-1,
-                              2e-1)
+        dmu = optimize.bisect(lambda pro_dmu: self.OutputP(v, pro_dmu), -1e-1, 2e-1)
 
         return dmu
 
@@ -135,7 +146,7 @@ class OutputP_Mu(Procedures):
         ran = [self.start, self.end]
         for n, dmu in enumerate(np.linspace(ran[0], ran[1], 1000)):
             ans.append(self.OutputP(v, dmu))
-            print(n, ", ", end="", flush=True)
+            print(n, '/ 1000', '\r',  end="", flush=True)
 
         self.SetPlot(
             plot_x=np.linspace(ran[0], ran[1], 1000),
@@ -158,15 +169,34 @@ class OutputZeromodeGroundFunction(Procedures):
             dmu = self.pro_dmu
         else:
             dmu = self.SelfConsistent(v)
-        val = self.ZeromodeEquation(v, dmu)
+            
+        w, val = self.ZeromodeEquation(v, dmu)
+        val = val.T[0]
 
-        self.SetPlot(
-            plot_x=v.q,
-            plot_y=np.abs(val),
-            xlabel="q",
-            ylabel="Psi_0",
-            title="Zeromode ground function for a dmu")
+        print(w[1]-w[0], '\r', end='')
+        #f = open('qpq_energy_N.txt', 'a')
+        # for index, value in enumerate(np.diff(w)):
+        #     print('{0}\t{1}'.format(index, value), file=f)
+        #print('{0}\t{1}'.format(v.N, w[1] - w[0]), file=f)
+        
+        # self.SetPlot(
+        #     plot_x=v.q,
+        #     plot_y=np.abs(val)**2,
+        #     xlabel="q",
+        #     ylabel="Psi_0",
+        #     title="Zeromode ground function for a dmu")
 
+        # plt.plot(v.q, np.real(val)**2, label='N={0:d}'.format(v.N)
+        # plt.plot(v.q, np.real(val), label='real part of zeromode function')
+        # plt.plot(v.q, np.imag(val), label='iamginary part of zeromode function')
+        # plt.plot(v.q, np.real(val)**2 + np.imag(val)**2, label='sum of real and imaginary')
+        # plot_imag.append(np.imag(val[int(v.Nq/2)]))
+        # plot_real.append(np.real(val[int(v.Nq/2)]))
+        # print(v.N, np.imag(val[int(v.Nq/2)]), np.real(val[int(v.Nq/2)]), '\r', end='')
+        
+        # plt.legend()
+        # plt.show()
+        
 
 class OutputQ2_N(Procedures):
 
@@ -181,8 +211,9 @@ class OutputQ2_N(Procedures):
         for N in arr_N:
             v = Variables(N)
             dmu = self.SelfConsistent(v)
-            val = self.ZeromodeEquation(v, dmu)
-            print("N = {1}, dmu = {0}".format(dmu, N))
+            _, val = self.ZeromodeEquation(v, dmu)
+            val = val.T[0]
+            print("N = {1}, dmu = {0}".format(dmu, N), '\r', end='')
             arr_Q2.append(
                 np.sqrt(v.dq**2 * (np.sum(np.abs((v.q - v.Nq / 2) * val)**2))))
 
@@ -201,6 +232,24 @@ class OutputQ2_N(Procedures):
 if __name__ == "__main__":
 
     Q2 = OutputQ2_N()
-    Zero = OutputZeromodeGroundFunction(-10)
+    Zero = OutputZeromodeGroundFunction()
     PMu = OutputP_Mu()
-    Zero.Procedure(N=1e4)
+    # P-muグラフの出力
+    # PMu.Procedure(N=1e4)
+    # ゼロモード固有関数の出力
+    # for N in range(5000, 50000, 100):
+    #     Zero.Procedure(N)
+    f = open('variational_energy_N', 'w')
+    for N in range(50000, 500000, 10000):
+        print('{0}\t{1}'.format(N, 0.84 * (10**-3 / (4*np.pi))**0.4 * N**(1.0/15)), file=f)
+        #Zero.Procedure(N)
+
+    
+    # plt.plot(range(5000, 50000, 100), plot_imag, label='imaginary part')
+    # plt.plot(range(5000, 50000, 100), plot_real, label='real part')
+    # plt.xlabel(r'$q$', fontsize=18)
+    # plt.ylabel(r'${\Re}[\Psi]$', fontsize=18)
+    # plt.xlabel(r'$N_0$', fontsize=18)
+    # plt.ylabel(r'$\Psi_q$', fontsize=18)
+    # plt.legend()
+    # plt.show()
