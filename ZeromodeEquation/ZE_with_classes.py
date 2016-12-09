@@ -36,7 +36,7 @@ class Variables():
         # Volume of Zeromode q-space
         self.L = 20 * (self.N * self.V)**(-1 / 3)
         # Step numbers of Zeromode q-space
-        self.Nq = 256
+        self.Nq = 200
         # Step size of Zeromode q-space
         self.dq = self.L / self.Nq
         # Zeromode q-space coordinate
@@ -180,8 +180,13 @@ class OutputZeromodeGroundFunction(Procedures):
         # for index, value in enumerate(np.diff(w)):
         #     print('{0}\t{1}'.format(index, value), file=f)
         #print('{0}\t{1}'.format(v.N, w[1] - w[0]), file=f)
-        P = -1j * simps(val.conjugate()*np.gradient(val, v.dq), v.q)
-        print(P)
+
+        val /= v.dq**0.5
+        v.q = (v.q - v.Nq/2) * v.dq
+        P = -1j * v.g * simps(val.conjugate()*np.gradient(val, v.dq), v.q)
+        B = v.g * v.N / v.V / 2
+        QPQ = -2j * B * simps(v.q**2 * val.conjugate()*np.gradient(val, v.dq), v.q)
+        print(P, QPQ)
         
         # self.SetPlot(
         #     plot_x=v.q,
@@ -195,10 +200,24 @@ class OutputZeromodeGroundFunction(Procedures):
         
         theta = np.angle(val[int(v.Nq/2)])
         val = val / np.exp(1j * theta)
-        # plt.plot(v.q, np.real(val), label='iamginary part of zeromode function')
+        # plt.plot(v.q, np.real(val), label='real part of zeromode function')
+        # plt.plot(v.q, np.real(val)[::-1], label='real part of zeromode function(x-symmetry)')
         # plt.plot(v.q, np.imag(val), label='iamginary part of zeromode function')
-        # plt.xlabel(r'$q$', fontsize=18)
-        # plt.ylabel(r'$\psi_q$', fontsize=18)
+        # plt.plot(v.q, -np.imag(val)[::-1], label='iamginary part of zeromode function(point-symmetry)')
+        # plt.plot(v.q, np.sqrt(np.real(val)**2 + np.imag(val)**2), label='sum of real and imaginary(modified)')
+        # plt.plot(v.q, np.sqrt(np.real(val)**2 + np.imag(val)**2)[::-1], label='sum of real and imaginary(x-symmetry)')
+
+        plt.plot(v.q, np.real(-1j * v.q**2 * val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <QPQ> for real-part')
+        plt.plot(v.q, np.imag(-1j * v.q**2 * val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <QPQ> for imaginary-part')
+
+        # plt.plot(v.q, np.imag(val), label='psi for imaginary-part')
+        # plt.plot(v.q, np.imag(np.gradient(val, v.dq)), label='diff psi for imaginary-part')
+        # plt.plot(v.q, np.imag(val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <P> for imaginary-part')
+        # plt.plot(v.q, v.q**2 * np.imag(val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <QPQ> for imaginary-part')
+        
+        plt.xlabel(r'$q$', fontsize=18)
+        plt.ylabel(r'$<QPQ>$', fontsize=18)
+        plt.xlim(-v.L/2, v.L/2)
     
         #plt.plot(v.q, np.sqrt(np.real(val)**2 + np.imag(val)**2), label='sum of real and imaginary(modified)')
         # plot_imag.append(np.imag(val[int(v.Nq/2)]))
@@ -206,29 +225,29 @@ class OutputZeromodeGroundFunction(Procedures):
         # print(v.N, np.imag(val[int(v.Nq/2)]), np.real(val[int(v.Nq/2)]), '\r', end='')
 
         
-        # plt.legend()
-        # plt.show()
-        
-        from scipy.optimize import curve_fit
-
-        def fitting_real(x, a, b, c, d, e):
-            return c * np.cos(a * x + d * x**3 + e * x**5) * np.exp(-b*x**2)#np.cosh(b * x)
-
-        def fitting_imag(x, a, b, c, d):
-            return c * np.sin(a * x + d * x**3) * np.exp(-b*x**2)#np.cosh(b * x)
-
-        x = np.linspace(-v.L/2, v.L/2, v.Nq)
-        param_real = curve_fit(fitting_real, x, np.real(val), maxfev=10000)[0]
-        #param_imag = curve_fit(fitting_imag, x, np.imag(val), maxfev=10000)[0]
-
-        print(param_real)
-        #print(param_imag)
-        
-        plt.plot(x, fitting_real(x, param_real[0], param_real[1], param_real[2], param_real[3], param_real[4]))
-        #plt.plot(x, fitting_imag(x, param_imag[0], param_imag[1], param_imag[2], param_imag[3]))
-        plt.plot(x, np.real(val), label='real part of zeromode function')
         plt.legend()
         plt.show()
+        
+        # from scipy.optimize import curve_fit
+
+        # def fitting_real(x, a, b, c, d):
+        #     return c * np.cos(a * x**3 + d * x**5) * np.exp(-b*x**2)
+
+        # def fitting_imag(x, a, b, c, d):
+        #     return c * np.sin(a * x + d * x**3) * np.exp(-b*x**2)
+
+        # x = np.linspace(-v.L/2, v.L/2, v.Nq)
+        # param_real = curve_fit(fitting_real, x, np.real(val), maxfev=10000)[0]
+        # #param_imag = curve_fit(fitting_imag, x, np.imag(val), maxfev=10000)[0]
+
+        # print(param_real)
+        # #print(param_imag)
+        
+        # plt.plot(x, fitting_real(x, param_real[0], param_real[1], param_real[2], param_real[3]))
+        # #plt.plot(x, fitting_imag(x, param_imag[0], param_imag[1], param_imag[2], param_imag[3]))
+        # plt.plot(x, np.real(val), label='real part of zeromode function')
+        # plt.legend()
+        # plt.show()
         
 
 class OutputQ2_N(Procedures):
@@ -276,7 +295,7 @@ if __name__ == "__main__":
     # for N in range(50000, 500000, 10000):
     #     Zero.Procedure(N)
     
-    Zero.Procedure(N=1e6)
+    Zero.Procedure(N=1e4)
     
     # plt.plot(range(5000, 50000, 100), plot_imag, label='imaginary part')
     # plt.plot(range(5000, 50000, 100), plot_real, label='real part')
