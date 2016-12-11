@@ -28,14 +28,23 @@ with open('q4_energy_N.txt', 'r') as f:
 
 
 
-plt.plot(Number, full, label=r'${\rm Full}$')
-plt.plot(Number, q4, label=r'$Q^4$')
-plt.plot(Number, qpq, label=r'$QPQ$')
+plt.plot(Number, np.array(q4) - np.array(full), label='Full')
+Number = np.array(Number)
+alpha = 0.7308 * Number**(-1/3)
+g = 1e-3
+A, B, I = g * Number**2, g * Number/2, g
+E_val = 3/np.sqrt(2) * B * alpha
+plt.plot(Number, E_val, label='Variational')
+
+
+
+# plt.plot(Number, q4, label=r'$Q^4$')
+# plt.plot(Number, qpq, label=r'$QPQ$')
 plt.xlabel(r'$N$', fontsize=18)
 plt.ylabel(r'$\rm 1st\ excitation\ energy$', fontsize=18)
 plt.xlim(50000, 500000)
-#plt.xscale('log')
-#plt.yscale('log')
+# plt.xscale('log')
+# plt.yscale('log')
 plt.legend(loc='best')
 plt.show()
 

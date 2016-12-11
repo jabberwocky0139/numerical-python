@@ -63,7 +63,7 @@ class Procedures(metaclass=ABCMeta):
         alpha = P2_a + Q4_a # debug
         
         #beta = -2 * v.E / v.dq**4 + 2.0j * v.D / v.dq**3 - 0.5 * (v.I - 4 * v.D) / v.dq**2 - 0.5j * (dmu + 4 * v.C) / v.dq - (v.C - 1j * v.dq * v.B) * (v.q - v.Nq / 2) * (v.q - v.Nq / 2 + 1)
-        beta = P2_b + P_b + QPQ_b # debug
+        beta = P2_b + P_b + QPQ_b# debug
         
         #gamma = [0.5 * v.E / v.dq**4 - 1j * v.D / v.dq**3] * v.Nq
         gamma = [0] * v.Nq # debug
@@ -184,9 +184,14 @@ class OutputZeromodeGroundFunction(Procedures):
         val /= v.dq**0.5
         v.q = (v.q - v.Nq/2) * v.dq
         P = -1j * v.g * simps(val.conjugate()*np.gradient(val, v.dq), v.q)
+        A = v.g * v.N**2 / v.V
         B = v.g * v.N / v.V / 2
+        I = v.g
+        
+        Q4 = A / 2 * simps(v.q**4 * val.conjugate() * val, v.q)
+        P2 = -I / 2 * simps(val.conjugate() * np.gradient(np.gradient(val, v.dq), v.dq), v.q)
         QPQ = -2j * B * simps(v.q**2 * val.conjugate()*np.gradient(val, v.dq), v.q)
-        print(P, QPQ)
+        print(P, QPQ, P2, Q4)
         
         # self.SetPlot(
         #     plot_x=v.q,
@@ -197,36 +202,54 @@ class OutputZeromodeGroundFunction(Procedures):
 
         # plt.plot(v.q, np.real(val)**2, label='N={0:d}'.format(v.N)
 
-        
+        ## modifiy phase
         theta = np.angle(val[int(v.Nq/2)])
         val = val / np.exp(1j * theta)
+
+        ## psi
         # plt.plot(v.q, np.real(val), label='real part of zeromode function')
-        # plt.plot(v.q, np.real(val)[::-1], label='real part of zeromode function(x-symmetry)')
         # plt.plot(v.q, np.imag(val), label='iamginary part of zeromode function')
-        # plt.plot(v.q, -np.imag(val)[::-1], label='iamginary part of zeromode function(point-symmetry)')
-        # plt.plot(v.q, np.sqrt(np.real(val)**2 + np.imag(val)**2), label='sum of real and imaginary(modified)')
-        # plt.plot(v.q, np.sqrt(np.real(val)**2 + np.imag(val)**2)[::-1], label='sum of real and imaginary(x-symmetry)')
+        # plt.plot(v.q, np.sqrt(np.real(val)**2 + np.imag(val)**2), label='sum of real and imaginary')
+        # def psi(x, alpha):
+        #     beta = 1 / (2 * np.sqrt(2) * alpha)
+        #     gamma = -1 / (6 * np.sqrt(2) * alpha**3)
+        #     return (1 / (2 * np.pi * alpha**2))**0.25 * np.exp(-x**2 / (4 * alpha**2) + 1j * (beta * x + gamma * x**3))
 
-        plt.plot(v.q, np.real(-1j * v.q**2 * val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <QPQ> for real-part')
-        plt.plot(v.q, np.imag(-1j * v.q**2 * val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <QPQ> for imaginary-part')
+        # alpha = 0.7308 * (v.N)**(-1/3)
+        # plt.plot(v.q, np.real(psi(v.q, alpha)), '--', label='real part(variational)')
+        # plt.plot(v.q, np.imag(psi(v.q, alpha)), '--', label='imaginary part(variational)')
+               
 
+        ## QPQ
+        # plt.plot(v.q, np.real(-1j * v.q**2 * val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <QPQ> for real-part')
+        # plt.plot(v.q, np.imag(-1j * v.q**2 * val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <QPQ> for imaginary-part')
+
+        ## P
+        # plt.plot(v.q, np.real(-1j * val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <P> for real-part')
+        # plt.plot(v.q, np.imag(-1j * val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <P> for imaginary-part')
+
+        # int_real = simps(np.real(-1j * val.conjugate()*np.gradient(val, v.dq))**2, v.q)
+        # int_imag = simps(np.imag(-1j * val.conjugate()*np.gradient(val, v.dq))**2, v.q)
+        # print(int_real/int_imag)
+
+        # plt.plot(v.q, np.real(-1j * val.conjugate()*np.gradient(val, v.dq)))
+        # plt.plot(v.q, np.imag(-1j * val.conjugate()*np.gradient(val, v.dq)))
+        
         # plt.plot(v.q, np.imag(val), label='psi for imaginary-part')
         # plt.plot(v.q, np.imag(np.gradient(val, v.dq)), label='diff psi for imaginary-part')
         # plt.plot(v.q, np.imag(val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <P> for imaginary-part')
         # plt.plot(v.q, v.q**2 * np.imag(val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <QPQ> for imaginary-part')
         
-        plt.xlabel(r'$q$', fontsize=18)
-        plt.ylabel(r'$<QPQ>$', fontsize=18)
-        plt.xlim(-v.L/2, v.L/2)
+        # plt.xlabel(r'$q$', fontsize=18)
+        # plt.ylabel(r'$\langle q|\psi \rangle$', fontsize=18)
+        # plt.xlim(-v.L/2, v.L/2)
     
         #plt.plot(v.q, np.sqrt(np.real(val)**2 + np.imag(val)**2), label='sum of real and imaginary(modified)')
-        # plot_imag.append(np.imag(val[int(v.Nq/2)]))
+
         # plot_real.append(np.real(val[int(v.Nq/2)]))
+        # plot_imag.append(np.imag(val[int(v.Nq/2)]))
         # print(v.N, np.imag(val[int(v.Nq/2)]), np.real(val[int(v.Nq/2)]), '\r', end='')
 
-        
-        plt.legend()
-        plt.show()
         
         # from scipy.optimize import curve_fit
 
@@ -291,14 +314,19 @@ if __name__ == "__main__":
     # ゼロモード固有関数の出力
     # for N in range(5000, 50000, 100):
     #     Zero.Procedure(N)
-    f = open('variational_energy_N', 'w')
-    # for N in range(50000, 500000, 10000):
+    # f = open('variational_energy_N', 'w')
+    # for N in range(5000, 50000, 1000):
     #     Zero.Procedure(N)
     
-    Zero.Procedure(N=1e4)
+    # Zero.Procedure(N=1e4)
+    # Zero.Procedure(N=1e5)
+    Zero.Procedure(N=1e6)
+
+    # plt.legend()
+    # plt.show()
     
-    # plt.plot(range(5000, 50000, 100), plot_imag, label='imaginary part')
-    # plt.plot(range(5000, 50000, 100), plot_real, label='real part')
+    # plt.plot(range(5000, 50000, 1000), plot_imag, label='imaginary part')
+    # plt.plot(range(5000, 50000, 1000), plot_real, label='real part')
     # plt.xlabel(r'$q$', fontsize=18)
     # plt.ylabel(r'${\Re}[\Psi]$', fontsize=18)
     # plt.xlabel(r'$N_0$', fontsize=18)
