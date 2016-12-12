@@ -5,6 +5,7 @@ from scipy import linalg
 from scipy import optimize
 from scipy.integrate import simps
 from scipy.fftpack import fft, fftfreq
+from scipy.misc import factorial
 import matplotlib.pyplot as plt
 import seaborn as sbn
 from abc import abstractmethod, ABCMeta
@@ -36,7 +37,7 @@ class Variables():
         # Volume of Zeromode q-space
         self.L = 20 * (self.N * self.V)**(-1 / 3)
         # Step numbers of Zeromode q-space
-        self.Nq = 200
+        self.Nq = 800
         # Step size of Zeromode q-space
         self.dq = self.L / self.Nq
         # Zeromode q-space coordinate
@@ -63,7 +64,7 @@ class Procedures(metaclass=ABCMeta):
         alpha = P2_a + Q4_a # debug
         
         #beta = -2 * v.E / v.dq**4 + 2.0j * v.D / v.dq**3 - 0.5 * (v.I - 4 * v.D) / v.dq**2 - 0.5j * (dmu + 4 * v.C) / v.dq - (v.C - 1j * v.dq * v.B) * (v.q - v.Nq / 2) * (v.q - v.Nq / 2 + 1)
-        beta = P2_b + P_b + QPQ_b# debug
+        beta = P2_b + P_b + QPQ_b # debug
         
         #gamma = [0.5 * v.E / v.dq**4 - 1j * v.D / v.dq**3] * v.Nq
         gamma = [0] * v.Nq # debug
@@ -167,13 +168,14 @@ class OutputZeromodeGroundFunction(Procedures):
 
     def Procedure(self, N):
         v = Variables(N)
+
         if (self.pro_dmu):
             dmu = self.pro_dmu
         else:
             dmu = self.SelfConsistent(v)
             
         w, val = self.ZeromodeEquation(v, dmu)
-        val = val.T[0]
+        val = val.T[2]
 
         #print(w[1]-w[0], '\r', end='')
         #f = open('p3_energy_N.txt', 'a')
@@ -191,7 +193,7 @@ class OutputZeromodeGroundFunction(Procedures):
         Q4 = A / 2 * simps(v.q**4 * val.conjugate() * val, v.q)
         P2 = -I / 2 * simps(val.conjugate() * np.gradient(np.gradient(val, v.dq), v.dq), v.q)
         QPQ = -2j * B * simps(v.q**2 * val.conjugate()*np.gradient(val, v.dq), v.q)
-        print(P, QPQ, P2, Q4)
+        # print(P, QPQ, P2, Q4)
         
         # self.SetPlot(
         #     plot_x=v.q,
@@ -207,18 +209,29 @@ class OutputZeromodeGroundFunction(Procedures):
         val = val / np.exp(1j * theta)
 
         ## psi
-        # plt.plot(v.q, np.real(val), label='real part of zeromode function')
-        # plt.plot(v.q, np.imag(val), label='iamginary part of zeromode function')
+        plt.plot(v.q, np.real(val), label='real part of zeromode function')
+        plt.plot(v.q, np.imag(val), label='iamginary part of zeromode function')
         # plt.plot(v.q, np.sqrt(np.real(val)**2 + np.imag(val)**2), label='sum of real and imaginary')
-        # def psi(x, alpha):
-        #     beta = 1 / (2 * np.sqrt(2) * alpha)
-        #     gamma = -1 / (6 * np.sqrt(2) * alpha**3)
-        #     return (1 / (2 * np.pi * alpha**2))**0.25 * np.exp(-x**2 / (4 * alpha**2) + 1j * (beta * x + gamma * x**3))
+        def psi(x, alpha):
+            beta = 1 / (2 * np.sqrt(2) * alpha)
+            gamma = -1 / (6 * np.sqrt(2) * alpha**3)
+            return (1 / (2 * np.pi * alpha**2))**0.25 * np.exp(-x**2 / (4 * alpha**2) + 1j * (beta * x + gamma * x**3))
 
-        # alpha = 0.7308 * (v.N)**(-1/3)
-        # plt.plot(v.q, np.real(psi(v.q, alpha)), '--', label='real part(variational)')
-        # plt.plot(v.q, np.imag(psi(v.q, alpha)), '--', label='imaginary part(variational)')
-               
+        def psi_general(x, n, alpha):
+            beta = 1 / (2 * np.sqrt(2) * alpha)
+            gamma = -1 / (6 * np.sqrt(2) * alpha**3)
+            C = np.sqrt(2**n * factorial(n) / (np.sqrt(2 * np.pi) * factorial(2 * n) * alpha**(2 * n + 1)))
+            return C * x**n * np.exp(-x**2 / (4 * alpha**2) + 1j * (beta * x + gamma * x**3))
+
+        
+        # alpha = 1/np.sqrt(2) * (v.N)**(-1/3)
+        n = 2
+        numerator = np.sqrt(2) * (n + 1) * (4 * n**2 - 1) + np.sqrt(2 * (4 * n**2 - 1) * (36 * n**4 + 72 * n**3 + 59 * n**2 + 30 * n - 25))
+        dedominator = 8 * (4 * n**2 - 1) * (2 * n + 3)
+        alpha = (numerator/dedominator)**(1/3) * v.N**(-1/3)
+        plt.plot(v.q, np.real(psi_general(v.q, n, alpha)), '--', label='real part(variational)')
+        plt.plot(v.q, np.imag(psi_general(v.q, n, alpha)), '--', label='imaginary part(variational)')
+        
 
         ## QPQ
         # plt.plot(v.q, np.real(-1j * v.q**2 * val.conjugate()*np.gradient(val, v.dq)), label='Integrand of <QPQ> for real-part')
@@ -230,7 +243,10 @@ class OutputZeromodeGroundFunction(Procedures):
 
         # int_real = simps(np.real(-1j * val.conjugate()*np.gradient(val, v.dq))**2, v.q)
         # int_imag = simps(np.imag(-1j * val.conjugate()*np.gradient(val, v.dq))**2, v.q)
+        # int_real = simps(np.real(val)**2, v.q)
+        # int_imag = simps(np.imag(val)**2, v.q)
         # print(int_real/int_imag)
+        # plt.plot(v.Nq, int_real/int_imag)
 
         # plt.plot(v.q, np.real(-1j * val.conjugate()*np.gradient(val, v.dq)))
         # plt.plot(v.q, np.imag(-1j * val.conjugate()*np.gradient(val, v.dq)))
@@ -269,8 +285,12 @@ class OutputZeromodeGroundFunction(Procedures):
         # plt.plot(x, fitting_real(x, param_real[0], param_real[1], param_real[2], param_real[3]))
         # #plt.plot(x, fitting_imag(x, param_imag[0], param_imag[1], param_imag[2], param_imag[3]))
         # plt.plot(x, np.real(val), label='real part of zeromode function')
-        # plt.legend()
-        # plt.show()
+
+        plt.xlim(-v.L/2, v.L/2)
+        plt.xlabel(r'$q$', fontsize=18)
+        plt.ylabel(r'$\Psi_q$', fontsize=18)
+        plt.legend()
+        plt.show()
         
 
 class OutputQ2_N(Procedures):
@@ -322,8 +342,6 @@ if __name__ == "__main__":
     # Zero.Procedure(N=1e5)
     Zero.Procedure(N=1e6)
 
-    # plt.legend()
-    # plt.show()
     
     # plt.plot(range(5000, 50000, 1000), plot_imag, label='imaginary part')
     # plt.plot(range(5000, 50000, 1000), plot_real, label='real part')
