@@ -38,7 +38,7 @@ class Variables():
         # Volume of Zeromode q-space
         self.L = 20 * (self.N * self.V)**(-1 / 3)
         # Step numbers of Zeromode q-space
-        self.Nq = 800
+        self.Nq = 600
         # Step size of Zeromode q-space
         self.dq = self.L / self.Nq
         # Zeromode q-space coordinate
@@ -80,7 +80,7 @@ class Procedures(metaclass=ABCMeta):
             Hqp,
             lower=True,
             select="i",
-            select_range=(0, 50),
+            select_range=(0, 200),
             overwrite_a_band=True)
         
         #val = val.reshape(v.Nq)
@@ -176,8 +176,11 @@ class OutputZeromodeGroundFunction(Procedures):
             dmu = self.SelfConsistent(v)
             
         w, val = self.ZeromodeEquation(v, dmu)
-        val = val.T[2]
+        igen_func = val.T
+        val = val.T[0]
+        
 
+        
         #print(w[1]-w[0], '\r', end='')
         #f = open('p3_energy_N.txt', 'a')
         # for index, value in enumerate(np.diff(w)):
@@ -191,9 +194,24 @@ class OutputZeromodeGroundFunction(Procedures):
         B = v.g * v.N / v.V / 2
         I = v.g
         
-        Q4 = A / 2 * simps(v.q**4 * val.conjugate() * val, v.q)
-        P2 = -I / 2 * simps(val.conjugate() * np.gradient(np.gradient(val, v.dq), v.dq), v.q)
-        QPQ = -2j * B * simps(v.q**2 * val.conjugate()*np.gradient(val, v.dq), v.q)
+        E_arr = []
+        # for n, _ in enumerate(igen_func):
+        #     if n == 0:
+        #         alpha = np.sqrt(2) / 2 * v.N**(-1/3)
+        #     else:
+        #         numerator = np.sqrt(2) * (n + 1) * (4 * n**2 - 1) + np.sqrt(2 * (4 * n**2 - 1) * (36 * n**4 + 72 * n**3 + 59 * n**2 + 30 * n - 25))
+        #         dedominator = 8 * (4 * n**2 - 1) * (2 * n + 3)
+        #         alpha = (numerator/dedominator)**(1/3) * v.N**(-1/3)
+        #         print(alpha)
+            
+        #     Q4 = A / 2 * (2 * n + 1) * (2*n + 3) * alpha**4
+        #     P2 = I / 2 * (2 * n**3 + n**2 + 2 * n - 1) / (2 * (2 * n - 1) * alpha**2)
+        #     QPQ = -np.sqrt(2) * B * (n + 1) * (2 * n + 1) * alpha
+        #     E_arr.append(Q4 + P2 + QPQ)
+
+        # print(E_arr)
+        # plt.plot(np.diff(w), label='numerical')
+        # plt.plot(np.diff(E_arr), '--', label='variational')
         # print(P, QPQ, P2, Q4)
         
         # self.SetPlot(
@@ -212,7 +230,10 @@ class OutputZeromodeGroundFunction(Procedures):
         ## psi
         plt.plot(v.q, np.real(val), label='real part of zeromode function')
         plt.plot(v.q, np.imag(val), label='iamginary part of zeromode function')
-        # plt.plot(v.q, np.sqrt(np.real(val)**2 + np.imag(val)**2), label='sum of real and imaginary')
+
+        
+        # plt.plot(v.q, np.sqrt(np.real(val)**2 + np.imag(val)**2), label='QPQ')
+        
         def psi(x, alpha):
             beta = 1 / (2 * np.sqrt(2) * alpha)
             gamma = -1 / (6 * np.sqrt(2) * alpha**3)
@@ -221,17 +242,23 @@ class OutputZeromodeGroundFunction(Procedures):
         def psi_general(x, n, alpha):
             beta = 1 / (2 * np.sqrt(2) * alpha)
             gamma = -1 / (6 * np.sqrt(2) * alpha**3)
-            C = np.sqrt(2**n * factorial(n) / (np.sqrt(2 * np.pi) * factorial(2 * n) * alpha**(2 * n + 1)))/70000
-            return C * eval_hermite(n, x/alpha) * np.exp(-x**2 / (4 * alpha**2) + 1j * (beta * x + gamma * x**3))
+            C = np.sqrt(2**n * factorial(n) / (np.sqrt(2 * np.pi) * factorial(2 * n) * alpha**(2 * n + 1)))
+            return C * x**n * np.exp(-x**2 / (4 * alpha**2) + 1j * (beta * x + gamma * x**3))
+            # return C * eval_hermite(n, x/alpha) * np.exp(-x**2 / (4 * alpha**2) + 1j * (beta * x + gamma * x**3))
+
+
+            
+        
 
         
-        n = 2
+        n = 0
         numerator = np.sqrt(2) * (n + 1) * (4 * n**2 - 1) + np.sqrt(2 * (4 * n**2 - 1) * (36 * n**4 + 72 * n**3 + 59 * n**2 + 30 * n - 25))
         dedominator = 8 * (4 * n**2 - 1) * (2 * n + 3)
-        alpha = (numerator/dedominator)**(1/3) * v.N**(-1/3)
-        #alpha = 1/np.sqrt(2) * (v.N)**(-1/3)
-        plt.plot(v.q, -np.real(psi_general(v.q, n, alpha)), '--', label='real part(variational)')
-        plt.plot(v.q, np.imag(psi_general(-v.q, n, alpha)), '--', label='imaginary part(variational)')
+        # alpha = (numerator/dedominator)**(1/3) * v.N**(-1/3)
+        # alpha = 0.588 * (v.N)**(-1/3)
+        # plt.plot(v.q, np.real(psi_general(v.q, n, alpha)), '--', label='real part(variational)')
+        # plt.plot(v.q, np.imag(psi_general(v.q, n, alpha)), '--', label='imaginary part(variational)')
+        # plt.plot(v.q, np.sqrt(psi(v.q, alpha) * np.conj(psi(v.q, alpha))), '--', label=r'$Q^4$')
         
 
         ## QPQ
