@@ -6,6 +6,7 @@ from scipy import optimize
 from scipy.integrate import simps
 from scipy.fftpack import fft, fftfreq
 from scipy.misc import factorial
+from scipy.special import eval_hermite
 import matplotlib.pyplot as plt
 import seaborn as sbn
 from abc import abstractmethod, ABCMeta
@@ -220,17 +221,17 @@ class OutputZeromodeGroundFunction(Procedures):
         def psi_general(x, n, alpha):
             beta = 1 / (2 * np.sqrt(2) * alpha)
             gamma = -1 / (6 * np.sqrt(2) * alpha**3)
-            C = np.sqrt(2**n * factorial(n) / (np.sqrt(2 * np.pi) * factorial(2 * n) * alpha**(2 * n + 1)))
-            return C * x**n * np.exp(-x**2 / (4 * alpha**2) + 1j * (beta * x + gamma * x**3))
+            C = np.sqrt(2**n * factorial(n) / (np.sqrt(2 * np.pi) * factorial(2 * n) * alpha**(2 * n + 1)))/70000
+            return C * eval_hermite(n, x/alpha) * np.exp(-x**2 / (4 * alpha**2) + 1j * (beta * x + gamma * x**3))
 
         
-        # alpha = 1/np.sqrt(2) * (v.N)**(-1/3)
         n = 2
         numerator = np.sqrt(2) * (n + 1) * (4 * n**2 - 1) + np.sqrt(2 * (4 * n**2 - 1) * (36 * n**4 + 72 * n**3 + 59 * n**2 + 30 * n - 25))
         dedominator = 8 * (4 * n**2 - 1) * (2 * n + 3)
         alpha = (numerator/dedominator)**(1/3) * v.N**(-1/3)
-        plt.plot(v.q, np.real(psi_general(v.q, n, alpha)), '--', label='real part(variational)')
-        plt.plot(v.q, np.imag(psi_general(v.q, n, alpha)), '--', label='imaginary part(variational)')
+        #alpha = 1/np.sqrt(2) * (v.N)**(-1/3)
+        plt.plot(v.q, -np.real(psi_general(v.q, n, alpha)), '--', label='real part(variational)')
+        plt.plot(v.q, np.imag(psi_general(-v.q, n, alpha)), '--', label='imaginary part(variational)')
         
 
         ## QPQ
