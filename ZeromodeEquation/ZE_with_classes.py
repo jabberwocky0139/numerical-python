@@ -24,7 +24,7 @@ class Variables():
         # Volume
         self.V = 1
         # Interaction constant
-        self.g = 1e-3
+        self.g = 1e-15
         # Integrals for oder parameter and ajoint parameter
         self.A = self.g * self.N**2 / self.V
         self.B = self.g * self.N / self.V / 2
@@ -99,7 +99,7 @@ class Procedures(metaclass=ABCMeta):
 
     # Find proper counter term dmu
     def SelfConsistent(self, v):
-        dmu = optimize.bisect(lambda pro_dmu: self.OutputP(v, pro_dmu), -1e-1, 2e-1)
+        dmu = optimize.bisect(lambda pro_dmu: self.OutputP(v, pro_dmu), -1e-1, 2e-1, xtol=1e-15)
 
         return dmu
 
@@ -178,7 +178,7 @@ class OutputZeromodeGroundFunction(Procedures):
         w, val = self.ZeromodeEquation(v, dmu)
         igen_func = val.T
         val = val.T[0]
-        
+        print(dmu)
 
         
         #print(w[1]-w[0], '\r', end='')
@@ -230,7 +230,6 @@ class OutputZeromodeGroundFunction(Procedures):
         ## psi
         plt.plot(v.q, np.real(val), label='real part of zeromode function')
         plt.plot(v.q, np.imag(val), label='iamginary part of zeromode function')
-
         
         # plt.plot(v.q, np.sqrt(np.real(val)**2 + np.imag(val)**2), label='QPQ')
         
@@ -251,13 +250,13 @@ class OutputZeromodeGroundFunction(Procedures):
         
 
         
-        n = 0
-        numerator = np.sqrt(2) * (n + 1) * (4 * n**2 - 1) + np.sqrt(2 * (4 * n**2 - 1) * (36 * n**4 + 72 * n**3 + 59 * n**2 + 30 * n - 25))
-        dedominator = 8 * (4 * n**2 - 1) * (2 * n + 3)
+        # n = 0
+        # numerator = np.sqrt(2) * (n + 1) * (4 * n**2 - 1) + np.sqrt(2 * (4 * n**2 - 1) * (36 * n**4 + 72 * n**3 + 59 * n**2 + 30 * n - 25))
+        # dedominator = 8 * (4 * n**2 - 1) * (2 * n + 3)
         # alpha = (numerator/dedominator)**(1/3) * v.N**(-1/3)
-        # alpha = 0.588 * (v.N)**(-1/3)
-        # plt.plot(v.q, np.real(psi_general(v.q, n, alpha)), '--', label='real part(variational)')
-        # plt.plot(v.q, np.imag(psi_general(v.q, n, alpha)), '--', label='imaginary part(variational)')
+        alpha = 0.707 * (v.N)**(-1/3)
+        plt.plot(v.q, np.real(psi(v.q, alpha)), '--', label='real part(variational)')
+        plt.plot(v.q, np.imag(psi(v.q, alpha)), '--', label='imaginary part(variational)')
         # plt.plot(v.q, np.sqrt(psi(v.q, alpha) * np.conj(psi(v.q, alpha))), '--', label=r'$Q^4$')
         
 
@@ -369,7 +368,7 @@ if __name__ == "__main__":
     # Zero.Procedure(N=1e4)
     # Zero.Procedure(N=1e5)
     Zero.Procedure(N=1e6)
-
+    plt.show()
     
     # plt.plot(range(5000, 50000, 1000), plot_imag, label='imaginary part')
     # plt.plot(range(5000, 50000, 1000), plot_real, label='real part')
