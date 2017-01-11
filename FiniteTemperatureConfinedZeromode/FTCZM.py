@@ -1,17 +1,16 @@
 # coding: utf-8
 
 import sys
-import math
 import matplotlib.pyplot as plt
 import seaborn as sbn
 import numpy as np
-from scipy.linalg import solve, solve_banded, eig, eigh, eig_banded
-from scipy.linalg.lapack import dgeev, dgtsv
-from scipy.integrate import quad, simps
+from scipy.linalg import solve, eig, eig_banded
+# from scipy.linalg.lapack import dgeev, dgtsv
+from scipy.integrate import simps
 from scipy import optimize, special
 from abc import abstractmethod, ABCMeta
-from tqdm import tqdm
-from pprint import pprint
+# from tqdm import tqdm
+# from pprint import pprint
 # Clean up some warnings we know about so as not to scare the users
 import warnings
 from matplotlib.cbook import MatplotlibDeprecationWarning
@@ -19,7 +18,14 @@ warnings.simplefilter('ignore', MatplotlibDeprecationWarning)
 
 
 class Variable(object):
-    def __init__(self, N0=1e3, G=4*np.pi*1e-2, TTc=0.1, xi=0, mu=10, dmu=0.1, index=0):
+    def __init__(self,
+                 N0=1e3,
+                 G=4 * np.pi * 1e-2,
+                 TTc=0.1,
+                 xi=0,
+                 mu=10,
+                 dmu=0.1,
+                 index=0):
 
         # --*-- Constants --*--
 
@@ -28,7 +34,7 @@ class Variable(object):
         self.TTc = TTc
         self.Temp = (self.N0 / special.zeta(3, 1))**(1 / 3) * TTc
 
-        if(self.Temp == 0):
+        if (self.Temp == 0):
             self.BETA = np.inf
         else:
             self.BETA = 1 / self.Temp
@@ -70,8 +76,10 @@ class Variable(object):
         # eigen function number of Bogoliubov-de Gennes
         self.l = 14
         # internal energy, pecific heat, thermodynamic potential
-        self.Energy, self.Specific, self.Thermodynamic, self.ModifiedThermodynamic, self.LeeYangEnergy = [0]*5
-        self.tMT1, self.tMT2, self.tMT3, self.tMT4, self.tMT5 = [0]*5
+        self.Energy, self.Specific, self.Thermodynamic, self.ModifiedThermodynamic, self.LeeYangEnergy = [
+            0
+        ] * 5
+        self.tMT1, self.tMT2, self.tMT3, self.tMT4, self.tMT5 = [0] * 5
         # Bogoliubov-de Gennes matrix
         self.T = None
         self.S = None
@@ -123,13 +131,14 @@ class PlotWrapper(metaclass=ABCMeta):
             cls.legendloc = legendloc
 
     @classmethod
-    def plot_getter(cls,
-                    xcoor,
-                    ycoor,
-                    # linecolor="",
-                    linewidth=2,
-                    plotlabel=None,
-                    showplot=True):
+    def plot_getter(
+            cls,
+            xcoor,
+            ycoor,
+            # linecolor="",
+            linewidth=2,
+            plotlabel=None,
+            showplot=True):
         # plot
         if callable(ycoor):
             plt.plot(
@@ -149,7 +158,7 @@ class PlotWrapper(metaclass=ABCMeta):
 # show plot data
         if showplot:
             plt.legend(loc=cls.legendloc)
-            #plt.pause(2.5)
+            # plt.pause(2.5)
             plt.show()
             plt.close("all")
 
@@ -172,7 +181,8 @@ class GrossPitaevskii(PlotWrapper):
     @classmethod
     def __make_crank_matrix(cls, v):
 
-        a = np.diag(-2 + 2 * v.DR**2 * (v.mu - 0.5*v.R**2 - v.G_TILDE *( 0.5 * v.xi**2 + 2 * v.Vt + v.Va) - 2 / cls.dt))
+        a = np.diag(-2 + 2 * v.DR**2 * (v.mu - 0.5 * v.R**2 - v.G_TILDE * (
+            0.5 * v.xi**2 + 2 * v.Vt + v.Va) - 2 / cls.dt))
         c = np.diag(1 + 1 / np.arange(0, v.NR))
         c = np.vstack((c[1:], np.array([0] * v.NR)))
 
@@ -186,9 +196,12 @@ class GrossPitaevskii(PlotWrapper):
     @classmethod
     def __make_crank_vector(cls, v):
 
-        a = (-2 + 2 * v.DR**2 * (v.mu - 0.5*v.R**2 - v.G_TILDE * (0.5 * v.xi**2 + 2 * v.Vt + v.Va) + 2 / cls.dt)) * v.xi
+        a = (-2 + 2 * v.DR**2 *
+             (v.mu - 0.5 * v.R**2 - v.G_TILDE *
+              (0.5 * v.xi**2 + 2 * v.Vt + v.Va) + 2 / cls.dt)) * v.xi
         c = (1 + 1 / np.arange(1, v.NR + 1)) * np.hstack((v.xi[1:], [0]))
-        d = (1 - 1 / np.arange(1, v.NR + 1)) * np.hstack(([0], v.xi[:v.NR - 1]))
+        d = (1 - 1 / np.arange(1, v.NR + 1)) * np.hstack(
+            ([0], v.xi[:v.NR - 1]))
 
         return -(a + c + d)
 
@@ -214,13 +227,13 @@ class GrossPitaevskii(PlotWrapper):
 
         print("\n--*-- GP --*--")
         oldmu = 0
-        #v.xi, v.mu = cls.__psi0(v), 10
-        if(initial):
+        # v.xi, v.mu = cls.__psi0(v), 10
+        if (initial):
             v.xi = np.exp(-v.R**2)
-        i = 0
+        # i = 0
         while (np.abs(v.mu - oldmu) > 1e-8):
-            #i += 1
-            #if(i > 100):
+            # i += 1
+            # if(i > 100):
             #    cls.dt *= 0.5
             oldmu = v.mu
             cls.__time_evolution(v)
@@ -257,17 +270,17 @@ class GrossPitaevskii(PlotWrapper):
 
 class AdjointMode(PlotWrapper):
 
-
     # Make equation matrix
     @staticmethod
     def __make_matrix(v):
 
-        dr = np.diag(1 / v.DR**2 + 0.5*v.R**2  - v.mu + v.G_TILDE * (3 * v.xi**2 + 2 * v.Vt - v.Va))
+        dr = np.diag(1 / v.DR**2 + 0.5 * v.R**2 - v.mu + v.G_TILDE * (
+            3 * v.xi**2 + 2 * v.Vt - v.Va))
 
-        eu = np.diag(-0.5/v.DR**2 * (1 + 1 / np.arange(1, v.NR+1)))
+        eu = np.diag(-0.5 / v.DR**2 * (1 + 1 / np.arange(1, v.NR + 1)))
         eu = np.vstack((eu[1:], np.array([0] * v.NR)))
 
-        el = np.diag(-0.5/v.DR**2 * (1 - 1 / np.arange(2, v.NR + 2)))
+        el = np.diag(-0.5 / v.DR**2 * (1 - 1 / np.arange(2, v.NR + 2)))
         el = np.vstack((el[1:], np.array([0] * v.NR))).T
 
         return dr + eu + el
@@ -275,9 +288,10 @@ class AdjointMode(PlotWrapper):
     @classmethod
     def __make_array(cls, v):
 
-        d = 1 / v.DR**2 + 0.5*v.R**2 - v.mu + v.G_TILDE * (3 * v.xi**2 + 2 * v.Vt - v.Va)
-        du = -0.5/v.DR**2*(1 + 1 / np.arange(1, v.NR+1))
-        dl = -0.5/v.DR**2*(1 - 1 / np.arange(2, v.NR+2))
+        d = 1 / v.DR**2 + 0.5 * v.R**2 - v.mu + v.G_TILDE * (3 * v.xi**2 + 2 *
+                                                             v.Vt - v.Va)
+        du = -0.5 / v.DR**2 * (1 + 1 / np.arange(1, v.NR + 1))
+        dl = -0.5 / v.DR**2 * (1 - 1 / np.arange(2, v.NR + 2))
         return np.vstack((du, d, dl))
 
 # Obtain eta and I
@@ -290,8 +304,6 @@ class AdjointMode(PlotWrapper):
         v.I = 1 / (2 * v.N0) / simps(v.R**2 * v.eta * v.xi, v.R)
         v.eta *= v.I
         print("I = {0}".format(v.I))
-
-
 
 # Plot eta
 
@@ -316,10 +328,9 @@ class AdjointMode(PlotWrapper):
             cls.__set_plot(v)
 
 
-
 class BogoliubovSMatrix(PlotWrapper):
 
-    L, M = [None]*2
+    L, M = [None] * 2
 
     # Make matrix for Bogoliubov-de Gennes equation
     @classmethod
@@ -327,8 +338,8 @@ class BogoliubovSMatrix(PlotWrapper):
 
         e1 = -0.5 / v.DR**2
 
-        Ld = np.diag(-2 * e1 + l * (l + 1) / v.R**2 / 2 + v.R**2 / 2 - v.mu + 2 * v.G_TILDE * (v.xi**2 + v.Vt))
-
+        Ld = np.diag(-2 * e1 + l * (l + 1) / v.R**2 / 2 + v.R**2 / 2 - v.mu + 2
+                     * v.G_TILDE * (v.xi**2 + v.Vt))
 
         Lu = np.diag([e1] * v.NR)
         Lu = np.vstack((Lu[1:], np.array([0] * v.NR)))
@@ -346,12 +357,14 @@ class BogoliubovSMatrix(PlotWrapper):
     def __solve_bogoliubov_equation(cls, v):
 
         # 初期化
-        v.Vt, v.Va, v.Energy, v.Specific, v.Thermodynamic, v.ModifiedThermodynamic, v.tmpModifiedThermodynamic, v.LeeYangEnergy = [0]*8
-        v.tMT1, v.tMT2, v.tMT3, v.tMT4, v.tMT5 = [0]*5
+        v.Vt, v.Va, v.Energy, v.Specific, v.Thermodynamic, v.ModifiedThermodynamic, v.tmpModifiedThermodynamic, v.LeeYangEnergy = [
+            0
+        ] * 8
+        v.tMT1, v.tMT2, v.tMT3, v.tMT4, v.tMT5 = [0] * 5
 
         # LeeYangEnergyの初期化
         xi_2dot = -0.5 * np.gradient(np.gradient(v.xi, v.DR), v.DR)
-        #v.LeeYangEnergy += v.mu * v.N0 / 2 + simps(v.R**2 * xi_2dot * v.xi, v.R) / 2
+        # v.LeeYangEnergy += v.mu * v.N0 / 2 + simps(v.R**2 * xi_2dot * v.xi, v.R) / 2
         print("LeeYang1 : ", v.LeeYangEnergy)
 
         print("--*-- BdG (Smat) --*--")
@@ -361,7 +374,7 @@ class BogoliubovSMatrix(PlotWrapper):
 
             wr, vl, vr = eig(v.S, left=True)
 
-            Y,  Z = vr.T[wr.argsort()], vl.T[wr.argsort()]
+            Y, Z = vr.T[wr.argsort()], vl.T[wr.argsort()]
             omega2 = np.array(sorted(np.real(wr)))
 
             # 固有値 omega が0.1以下のモードは捨てる
@@ -389,7 +402,9 @@ class BogoliubovSMatrix(PlotWrapper):
 
             index = omega.shape[0]
             # Utilde, VtildeではなくU, Vを求める
-            U, V = (Y * c1.reshape(index, 1) + Z * omega.reshape(index, 1)) / v.R, (Y * c1.reshape(index, 1) - Z * omega.reshape(index, 1)) / v.R
+            U, V = (Y * c1.reshape(index, 1) + Z * omega.reshape(index, 1)
+                    ) / v.R, (Y * c1.reshape(index, 1) - Z * omega.reshape(
+                        index, 1)) / v.R
 
             # 規格化係数. Utilde, VtildeではなくU, V
             norm2 = simps(v.R**2 * (U**2 - V**2), v.R)
@@ -399,10 +414,10 @@ class BogoliubovSMatrix(PlotWrapper):
             coo = (2 * l + 1) / v.N0
 
             # BE分布
-            ndist = (np.exp(v.BETA * omega) - 1)** -1
+            ndist = (np.exp(v.BETA * omega) - 1)**-1
             # ゼロ温度なら励起を取り入れないので分布をゼロにしてしまう. 
-            if(v.Temp < 1e-7):
-                ndist = np.array([0]*index)
+            if (v.Temp < 1e-7):
+                ndist = np.array([0] * index)
 
             # 各励起ごとにndistとcooを掛ける
             tmpVt = ((U**2 + V**2) * ndist.reshape(index, 1) + V**2) * coo
@@ -418,44 +433,58 @@ class BogoliubovSMatrix(PlotWrapper):
             tVa = tVa.T.sum(axis=1)
             tVt = ((U**2 + V**2) * ndist.reshape(index, 1) + V**2)
             tVt = tVt.T.sum(axis=1)
-            v.tMT1 += 4*np.pi*v.G_TILDE*(2*l + 1)*simps(v.R**2 * v.xi**2 * tVa, v.R)
-            v.tMT2 += 4*np.pi*v.G_TILDE*(2*l + 1)*simps(v.R**2 * v.eta**2 * tVa, v.R)
-            v.tMT3 += 8*np.pi*v.G_TILDE*(2*l + 1)*simps(v.R**2 * v.xi**2 * tVt, v.R)
-            v.tMT4 += 8*np.pi*v.G_TILDE*(2*l + 1)*simps(v.R**2 * v.eta**2 * tVt, v.R)
-            v.tMT5 += 8*np.pi*v.G_TILDE*(2*l + 1)*simps(v.R**2 * v.xi*v.eta * tVt, v.R)
+            v.tMT1 += 4 * np.pi * v.G_TILDE * (2 * l + 1) * simps(
+                v.R**2 * v.xi**2 * tVa, v.R)
+            v.tMT2 += 4 * np.pi * v.G_TILDE * (2 * l + 1) * simps(
+                v.R**2 * v.eta**2 * tVa, v.R)
+            v.tMT3 += 8 * np.pi * v.G_TILDE * (2 * l + 1) * simps(
+                v.R**2 * v.xi**2 * tVt, v.R)
+            v.tMT4 += 8 * np.pi * v.G_TILDE * (2 * l + 1) * simps(
+                v.R**2 * v.eta**2 * tVt, v.R)
+            v.tMT5 += 8 * np.pi * v.G_TILDE * (2 * l + 1) * simps(
+                v.R**2 * v.xi * v.eta * tVt, v.R)
             # ModifiedThermodynamicの相互作用項
             tMTi1 = U**2 * ndist.reshape(index, 1)
             tMTi2 = (V**2 * ndist.reshape(index, 1) + V**2)
-            tMTi3 = (2*U*V * ndist.reshape(index, 1) + U*V)
+            tMTi3 = (2 * U * V * ndist.reshape(index, 1) + U * V)
             tMTi1 = (tMTi1.T.sum(axis=1))**2
             tMTi2 = (tMTi2.T.sum(axis=1))**2
             tMTi3 = (tMTi3.T.sum(axis=1))**2
-            tMTi4 = np.sqrt(tMTi1*tMTi2)
+            tMTi4 = np.sqrt(tMTi1 * tMTi2)
 
-            v.Energy += (2*l + 1) * np.dot(omega, ndist)
-            #v.Specific += (2*l + 1)**2*np.dot(omega**2, (np.exp(v.BETA * omega) + np.exp(-v.BETA * omega) - 2)**-1)/v.Temp**2/v.N0
-            v.Thermodynamic += -(2*l + 1) * v.Temp*np.log((1-np.exp(-v.BETA*omega))**-1).sum()
-            v.ModifiedThermodynamic += -v.tMT5.real + v.G_TILDE * (2*l + 1)**2 / (2*v.N0) * simps(v.R**2 * (2*tMTi1.real + 2*tMTi2.real + tMTi3.real + 4*tMTi4.real), v.R)
+            v.Energy += (2 * l + 1) * np.dot(omega, ndist)
+            # v.Specific += (2*l + 1)**2*np.dot(omega**2, (np.exp(v.BETA * omega) + np.exp(-v.BETA * omega) - 2)**-1)/v.Temp**2/v.N0
+            v.Thermodynamic += -(
+                2 * l + 1
+            ) * v.Temp * np.log((1 - np.exp(-v.BETA * omega))**-1).sum()
+            v.ModifiedThermodynamic += -v.tMT5.real + v.G_TILDE * (
+                2 * l + 1)**2 / (2 * v.N0) * simps(
+                    v.R**2 * (2 * tMTi1.real + 2 * tMTi2.real + tMTi3.real + 4
+                              * tMTi4.real), v.R)
 
             # LeeYangEnergyの計算(やばい)
-            U_2dot = -0.5 * np.array(np.gradient(np.gradient(U, v.DR)[1], v.R)[1])
-            V_2dot = -0.5 * np.array(np.gradient(np.gradient(V, v.DR)[1], v.R)[1])
+            U_2dot = -0.5 * np.array(
+                np.gradient(np.gradient(U, v.DR)[1], v.R)[1])
+            V_2dot = -0.5 * np.array(
+                np.gradient(np.gradient(V, v.DR)[1], v.R)[1])
             U2_int = simps(v.R**2 * U**2, v.R)
             U2_dot_int = simps(v.R**2 * U * U_2dot, v.R)
             V2_int = simps(v.R**2 * V**2, v.R)
             V2_dot_int = simps(v.R**2 * V * V_2dot, v.R)
 
-            v.LeeYangEnergy += (((omega.reshape(index, 1) - v.mu) * U2_int + U2_dot_int) * ndist.reshape(index, 1) - ((omega.reshape(index, 1) + v.mu) * V2_int - V2_dot_int) * (1 + ndist.reshape(index, 1))).sum() * coo / 2
-
-
-            
+            v.LeeYangEnergy += ((
+                (omega.reshape(index, 1) - v.mu
+                 ) * U2_int + U2_dot_int) * ndist.reshape(index, 1) - (
+                     (omega.reshape(index, 1) + v.mu) * V2_int - V2_dot_int) *
+                                (1 + ndist.reshape(index, 1))).sum() * coo / 2
 
             sys.stdout.write("\rl = {0}".format(l))
             sys.stdout.flush()
-        print(", BdG_Va : {0:1.6f}, omega_low : {1:1.4f}, omega_high : {2:1.4f}, omega_len : {3}".format(v.Va[0], omega[0], omega[-1], omega.shape[0]))
+        print(
+            ", BdG_Va : {0:1.6f}, omega_low : {1:1.4f}, omega_high : {2:1.4f}, omega_len : {3}".
+            format(v.Va[0], omega[0], omega[-1], omega.shape[0]))
         print("Energy : {0}, Cv : {1}".format(v.Energy, v.Specific))
         print("MTP : {0}".format(v.ModifiedThermodynamic))
-
 
     @classmethod
     def __set_plot(cls, v):
@@ -510,11 +539,17 @@ class ZeroMode(PlotWrapper):
     @classmethod
     def __make_zeromode_band(cls, v, dmu):
 
-        #dmu = 0
+        # dmu = 0
         cls.__set_zeromode_coefficient(v)
 
-        alpha = 3 * v.E / v.DQ**4 + (v.I - 4 * v.D) / v.DQ**2 + 2 * v.C * (v.Q - v.NQ / 2.0)**2 - 2 * v.DQ**2 * v.B * (v.Q - v.NQ / 2.0)**2 + 0.5 * v.DQ**4 * v.A * (v.Q - v.NQ / 2.0)**4
-        beta = -2 * v.E / v.DQ**4 + 2.0j * v.D / v.DQ**3 - 0.5 * (v.I - 4 * v.D) / v.DQ**2 - 0.5j * (dmu + 4 * v.C) / v.DQ - (v.C - 1j * v.DQ * v.B) * (v.Q - v.NQ / 2) * (v.Q - v.NQ / 2 + 1)
+        alpha = 3 * v.E / v.DQ**4 + (v.I - 4 * v.D) / v.DQ**2 + 2 * v.C * (
+            v.Q - v.NQ / 2.0)**2 - 2 * v.DQ**2 * v.B * (
+                v.Q - v.NQ / 2.0)**2 + 0.5 * v.DQ**4 * v.A * (v.Q - v.NQ / 2.0
+                                                              )**4
+        beta = -2 * v.E / v.DQ**4 + 2.0j * v.D / v.DQ**3 - 0.5 * (
+            v.I - 4 * v.D) / v.DQ**2 - 0.5j * (dmu + 4 * v.C) / v.DQ - (
+                v.C - 1j * v.DQ * v.B) * (v.Q - v.NQ / 2) * (v.Q - v.NQ / 2 + 1
+                                                             )
         gamma = [0.5 * v.E / v.DQ**4 - 1j * v.D / v.DQ**3] * v.NQ
 
         cls.H0 = np.vstack((alpha, beta, gamma))
@@ -522,14 +557,21 @@ class ZeroMode(PlotWrapper):
     @classmethod
     def __make_zeromode_matrix(cls, v, dmu):
 
-        #dmu = 0
+        # dmu = 0
         cls.__set_zeromode_coefficient(v)
 
-        alpha = np.diag(3 * v.E / v.DQ**4 + (v.I - 4 * v.D) / v.DQ**2 + 2 * v.C * (v.Q - v.NQ / 2.0)**2 - 2 * v.DQ**2 * v.B * (v.Q - v.NQ / 2.0)**2 + 0.5 * v.DQ**4 * v.A * (v.Q - v.NQ / 2.0)**4)
-        beta = np.diag(-2 * v.E / v.DQ**4 + 2.0j * v.D / v.DQ**3 - 0.5 * (v.I - 4 * v.D) / v.DQ**2 - 0.5j * (dmu + 4 * v.C) / v.DQ - (v.C - 1j * v.DQ * v.B) * (v.Q - v.NQ / 2) * (v.Q - v.NQ / 2 + 1))
+        alpha = np.diag(3 * v.E / v.DQ**4 + (v.I - 4 * v.D) / v.DQ**2 + 2 * v.C
+                        * (v.Q - v.NQ / 2.0)**2 - 2 * v.DQ**2 * v.B * (
+                            v.Q - v.NQ / 2.0)**2 + 0.5 * v.DQ**4 * v.A * (
+                                v.Q - v.NQ / 2.0)**4)
+        beta = np.diag(-2 * v.E / v.DQ**4 + 2.0j * v.D / v.DQ**3 - 0.5 * (
+            v.I - 4 * v.D) / v.DQ**2 - 0.5j * (dmu + 4 * v.C) / v.DQ - (
+                v.C - 1j * v.DQ * v.B) * (v.Q - v.NQ / 2) * (v.Q - v.NQ / 2 + 1
+                                                             ))
         beta = np.vstack((beta[1:], np.array([0] * v.NQ))).T
         gamma = np.diag([0.5 * v.E / v.DQ**4 - 1j * v.D / v.DQ**3] * v.NQ)
-        gamma = np.vstack((gamma[2:], np.array([0] * v.NQ), np.array([0] * v.NQ))).T
+        gamma = np.vstack(
+            (gamma[2:], np.array([0] * v.NQ), np.array([0] * v.NQ))).T
 
         cls.H0 = alpha + beta + gamma
 
@@ -539,9 +581,9 @@ class ZeroMode(PlotWrapper):
     def __solve_zeromode_equation_v(cls, v):
 
         v.E0, v.Psi0 = eig_banded(
-            #cls.H0 + np.vstack(
-            #([0] * v.NQ, [-0.5j * dmu / v.DQ] * v.NQ, [0] * v.NQ)),
-            cls.H0, 
+            # cls.H0 + np.vstack(
+            # ([0] * v.NQ, [-0.5j * dmu / v.DQ] * v.NQ, [0] * v.NQ)),
+            cls.H0,
             lower=True,
             select=v.selecteig,
             select_range=(0, v.E0[0] + 9 / v.BETA * np.log(10)),
@@ -552,9 +594,9 @@ class ZeroMode(PlotWrapper):
     @classmethod
     def __solve_zeromode_equation_i(cls, v):
         v.E0, v.Psi0 = eig_banded(
-            #cls.H0 + np.vstack(
-            #([0] * v.NQ, [-0.5j * dmu / v.DQ] * v.NQ, [0] * v.NQ)),
-            cls.H0, 
+            # cls.H0 + np.vstack(
+            # ([0] * v.NQ, [-0.5j * dmu / v.DQ] * v.NQ, [0] * v.NQ)),
+            cls.H0,
             lower=True,
             select="i",
             select_range=(0, v.NM),
@@ -566,17 +608,17 @@ class ZeroMode(PlotWrapper):
     def __output_expected_value_p(cls, v, dmu):
 
         cls.__make_zeromode_band(v, dmu)
-        if(v.selecteig == "v"):
+        if (v.selecteig == "v"):
             cls.__solve_zeromode_equation_v(v)
-        elif(v.selecteig == "i"):
+        elif (v.selecteig == "i"):
             cls.__solve_zeromode_equation_i(v)
 
         dedominator = np.exp(-v.BETA * v.E0)
-        dedominator2 = np.exp(-v.BETA * (v.E0 - v.E0[0]))
+        # dedominator2 = np.exp(-v.BETA * (v.E0 - v.E0[0]))
 
         psi = np.imag(np.conj(v.Psi0[:, :v.NQ - 1]) * v.Psi0[:, 1:])
 
-        if(v.Temp < 1e-6):
+        if (v.Temp < 1e-6):
             P = psi[0].sum()
         else:
             psi = np.dot(psi.sum(axis=1), dedominator)
@@ -592,14 +634,17 @@ class ZeroMode(PlotWrapper):
     def __zeromode_self_consistency(cls, v):
 
         print("--*-- ZeroMode --*--")
-        if(v.dmu > 0):
-            v.dmu = optimize.brentq(lambda iterdmu: cls.__output_expected_value_p(v, iterdmu), -9*abs(v.dmu), 10*abs(v.dmu))
+        if (v.dmu > 0):
+            v.dmu = optimize.brentq(
+                lambda iterdmu: cls.__output_expected_value_p(v, iterdmu), -9 *
+                abs(v.dmu), 10 * abs(v.dmu))
         else:
-            v.dmu = optimize.brentq(lambda iterdmu: cls.__output_expected_value_p(v, iterdmu), -10*abs(v.dmu), 9*abs(v.dmu))
+            v.dmu = optimize.brentq(
+                lambda iterdmu: cls.__output_expected_value_p(v, iterdmu), -10
+                * abs(v.dmu), 9 * abs(v.dmu))
 
         print(", dmu = {0}, E0_len = {1}".format(v.dmu, v.E0.size))
         print("E0 = {0}..".format(v.E0[:3]))
-
 
     @classmethod
     def __set_plot(cls, v):
@@ -614,15 +659,17 @@ class ZeroMode(PlotWrapper):
         cls.plot_getter(
             v.Q,
             np.abs(v.Psi0[0])**2,
-            plotlabel="ZeroMode function : n = {0}".format(0), showplot=False)
+            plotlabel="ZeroMode function : n = {0}".format(0),
+            showplot=False)
         cls.plot_getter(
             v.Q,
             np.abs(v.Psi0[1])**2,
-            plotlabel="ZeroMode function : n = {0}".format(1), showplot=False)
+            plotlabel="ZeroMode function : n = {0}".format(1),
+            showplot=False)
         cls.plot_getter(
             v.Q,
-            np.abs(v.Psi0[v.NM-1])**2,
-            plotlabel="ZeroMode function : n = {0}".format(v.NM-1))
+            np.abs(v.Psi0[v.NM - 1])**2,
+            plotlabel="ZeroMode function : n = {0}".format(v.NM - 1))
 
 # For debug
 
@@ -640,34 +687,40 @@ class ZeroMode(PlotWrapper):
     def __set_zeromode_expected_value(cls, v):
 
         dedominator = np.exp(-v.BETA * v.E0)
-        dedominator2 = np.exp(-v.BETA * (v.E0 - v.E0[0]))
+        # dedominator2 = np.exp(-v.BETA * (v.E0 - v.E0[0]))
 
         v.Q2 = (v.Q - v.NQ / 2)**2 * v.Psi0 * np.conj(v.Psi0)
-        if(v.Temp < 1e-6):
+        if (v.Temp < 1e-6):
             v.Q2 = v.Q2[0].sum() * v.DQ**2
         else:
-            v.Q2 = np.dot(v.Q2.sum(axis=1), dedominator) / dedominator.sum() * v.DQ**2
+            v.Q2 = np.dot(v.Q2.sum(axis=1),
+                          dedominator) / dedominator.sum() * v.DQ**2
 
-        v.P2 = v.Psi0 * np.conj(v.Psi0) - np.real(np.conj(v.Psi0) * np.insert(v.Psi0, v.NQ, 0, axis=1)[:, 1:])
-        if(v.Temp < 1e-6):
+        v.P2 = v.Psi0 * np.conj(v.Psi0) - np.real(
+            np.conj(v.Psi0) * np.insert(
+                v.Psi0, v.NQ, 0, axis=1)[:, 1:])
+        if (v.Temp < 1e-6):
             v.P2 = 2 * v.P2[0].sum() / v.DQ**2
         else:
-            v.P2 = 2 * np.dot(v.P2.sum(axis=1), dedominator) / dedominator.sum() / v.DQ**2
+            v.P2 = 2 * np.dot(v.P2.sum(axis=1),
+                              dedominator) / dedominator.sum() / v.DQ**2
 
-        v.Vt += np.real(v.xi**2 * v.Q2.real + v.eta**2 * v.P2.real - v.xi * v.eta)
+        v.Vt += np.real(v.xi**2 * v.Q2.real + v.eta**2 * v.P2.real - v.xi *
+                        v.eta)
         v.Va += np.real(-v.xi**2 * v.Q2.real + v.eta**2 * v.P2.real)
 
         v.L = np.sqrt(v.Q2.real) * 25
-        v.DQ = v.L/v.NQ
+        v.DQ = v.L / v.NQ
 
-        psi2E0 = np.real(v.Psi0*np.conj(v.Psi0)*v.E0.reshape(v.E0.size, 1))
-        psi2E02 = np.real(v.Psi0*np.conj(v.Psi0)*v.E0.reshape(v.E0.size, 1)**2)
+        # psi2E0 = np.real(v.Psi0 * np.conj(v.Psi0) * v.E0.reshape(v.E0.size, 1))
+        # psi2E02 = np.real(v.Psi0 * np.conj(v.Psi0) * v.E0.reshape(v.E0.size, 1)**2)
 
-        #v.Energy += np.dot(psi2E0.sum(axis=1), dedominator) / dedominator.sum() # debug
-        #v.Thermodynamic += -v.Temp*np.log(np.exp(-v.BETA*v.E0).sum())
-        #v.ModifiedThermodynamic += v.Q2.real*(-v.tMT1 + v.tMT3) + v.P2.real*(v.tMT2 + v.tMT4)
-        
-        print("tMT1 : {0}, tMT2 : {1}, tMT3 : {2}, tMT4 : {3}".format(v.tMT1, v.tMT2, v.tMT3, v.tMT4))
+        # v.Energy += np.dot(psi2E0.sum(axis=1), dedominator) / dedominator.sum() # debug
+        # v.Thermodynamic += -v.Temp*np.log(np.exp(-v.BETA*v.E0).sum())
+        # v.ModifiedThermodynamic += v.Q2.real*(-v.tMT1 + v.tMT3) + v.P2.real*(v.tMT2 + v.tMT4)
+
+        print("tMT1 : {0}, tMT2 : {1}, tMT3 : {2}, tMT4 : {3}".format(
+            v.tMT1, v.tMT2, v.tMT3, v.tMT4))
         print("Q2 = {0:1.3e}, P2 = {1:1.3e}".format(v.Q2.real, v.P2.real))
 
     @classmethod
@@ -675,8 +728,8 @@ class ZeroMode(PlotWrapper):
 
         prodmu = v.dmu
         cls.__zeromode_self_consistency(v)
-        while(v.dmu < 1e-20):
-            prodmu = 0.1*prodmu
+        while (v.dmu < 1e-20):
+            prodmu = 0.1 * prodmu
             v.dmu = prodmu
             cls.__zeromode_self_consistency(v)
 
@@ -687,14 +740,13 @@ class ZeroMode(PlotWrapper):
 
 
 class ParticleNumbers(object):
-
     @classmethod
     def __set_total_particle_number(cls, v, T):
 
-        v.Nc = np.real(v.N0*(1 + v.Q2) + v.G**2*v.P2 - 0.5)
-        v.Ntot = np.real(v.Nc + v.N0*simps(v.R**2*v.Vt, v.R))
+        v.Nc = np.real(v.N0 * (1 + v.Q2) + v.G**2 * v.P2 - 0.5)
+        v.Ntot = np.real(v.Nc + v.N0 * simps(v.R**2 * v.Vt, v.R))
 
-        if(v.Temp < 1e-6):
+        if (v.Temp < 1e-6):
             v.Temp = 0
             v.Beta = np.inf
         else:
@@ -707,21 +759,25 @@ class ParticleNumbers(object):
         cls.__set_total_particle_number(v, T)
 
 
-
 class IZMFSolver(object):
 
-    TTc, a_s = [None]*2
+    TTc, a_s = [None] * 2
 
     @classmethod
     def __print_data(cls, var, i):
         print("|--*-- other parameters : {0} times --*--|".format(i))
         print("Vt : {0}..., Va : {1}...".format(var.Vt[:3], var.Va[:3]))
         print("I : {0}".format(var.I))
-        print("N0 : {0}, Nc : {1}, Ntot : {2}".format(var.N0, var.Nc, var.Ntot))
+        print("N0 : {0}, Nc : {1}, Ntot : {2}".format(var.N0, var.Nc,
+                                                      var.Ntot))
         print("Energy : {0}, Cv : {1}".format(var.Energy, var.Specific))
-        print("dmu : {0}, dI : {1}, dQ2 : {2}, dP2 : {3}".format(abs(var.promu - var.mu), abs(var.I - var.proI), abs(var.Q2**0.5 - var.proQ2**0.5), abs(var.P2**0.5 - var.proP2**0.5)))
-        print("TP : {0}, MTP : {1}, LeeYang : {2}\n".format(var.Thermodynamic, var.ModifiedThermodynamic, var.LeeYangEnergy))
-
+        print("dmu : {0}, dI : {1}, dQ2 : {2}, dP2 : {3}".format(
+            abs(var.promu - var.mu),
+            abs(var.I - var.proI),
+            abs(var.Q2**0.5 - var.proQ2**0.5),
+            abs(var.P2**0.5 - var.proP2**0.5)))
+        print("TP : {0}, MTP : {1}, LeeYang : {2}\n".format(
+            var.Thermodynamic, var.ModifiedThermodynamic, var.LeeYangEnergy))
 
     @classmethod
     def procedure(cls, filename, iterable, TTc, a_s, which):
@@ -729,35 +785,51 @@ class IZMFSolver(object):
         with open(filename, "w") as f:
 
             cls.TTc, cls.a_s = TTc, a_s
-            print("# g\t T\t Q2\t P2\t Ntot\t Energy\t Cv\t beta\t Nc\t ThermoPot\t ModifiedTP\t LeeYang", file=f, flush=True)
-
+            print(
+                "# g\t T\t Q2\t P2\t Ntot\t Energy\t Cv\t beta\t Nc\t ThermoPot\t ModifiedTP\t LeeYang",
+                file=f,
+                flush=True)
 
             for index, physicalparameter in enumerate(iterable):
 
-                if(which == "T"):
+                if (which == "T"):
                     cls.TTc = physicalparameter
-                elif(which == "g"):
+                elif (which == "g"):
                     cls.a_s = physicalparameter
                 else:
                     print("invalid 'which' key !!")
                     raise KeyError
 
-                print("\n\n |--------------------------------------------------------|")
-                print(" |---*--- a_s = {0:1.3e}, TTc = {1:1.3e}, n = {2:2d} ---*---|".format(cls.a_s, cls.TTc, index))
-                print(" |--------------------------------------------------------|\n")
+                print(
+                    "\n\n |--------------------------------------------------------|"
+                )
+                print(
+                    " |---*--- a_s = {0:1.3e}, TTc = {1:1.3e}, n = {2:2d} ---*---|".
+                    format(cls.a_s, cls.TTc, index))
+                print(
+                    " |--------------------------------------------------------|\n"
+                )
 
-                if(index==0):
-                    var = Variable(TTc=cls.TTc, G=4*np.pi*cls.a_s, index=index)
+                if (index == 0):
+                    var = Variable(
+                        TTc=cls.TTc, G=4 * np.pi * cls.a_s, index=index)
                 else:
-                    var = Variable(G=4*np.pi*cls.a_s, TTc=cls.TTc, xi=var.xi, mu=var.mu, dmu=var.dmu, index=index)
+                    var = Variable(
+                        G=4 * np.pi * cls.a_s,
+                        TTc=cls.TTc,
+                        xi=var.xi,
+                        mu=var.mu,
+                        dmu=var.dmu,
+                        index=index)
 
                 i = 0
                 while (abs(var.P2**0.5 - var.proP2**0.5) > 2e-2):
 
                     var.promu, var.proI, var.proQ2, var.proP2 = var.mu, var.I, var.Q2, var.P2
 
-                    if(index==0):
-                        GrossPitaevskii.procedure(v=var, showplot=False, initial=True)
+                    if (index == 0):
+                        GrossPitaevskii.procedure(
+                            v=var, showplot=False, initial=True)
                     else:
                         GrossPitaevskii.procedure(v=var, showplot=False)
                     AdjointMode.procedure(v=var, showplot=False)
@@ -767,17 +839,30 @@ class IZMFSolver(object):
                     cls.__print_data(var, i)
                     i += 1
 
-                print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}".format(cls.a_s, cls.TTc, var.Q2.real, var.P2.real, var.Ntot, var.Energy, var.Specific, var.BETA, var.Nc, var.Thermodynamic, var.Thermodynamic + var.ModifiedThermodynamic, var.LeeYangEnergy), file=f, flush=True)
+                print(
+                    "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}".
+                    format(cls.a_s, cls.TTc, var.Q2.real, var.P2.real,
+                           var.Ntot, var.Energy, var.Specific, var.BETA,
+                           var.Nc, var.Thermodynamic, var.Thermodynamic +
+                           var.ModifiedThermodynamic, var.LeeYangEnergy),
+                    file=f,
+                    flush=True)
 
 
 if __name__ == "__main__":
 
-    #for fn, g in zip(["1e-4", "1e-3", "1e-2", "1e-1"], [1e-4, 1e-3, 1e-2, 1e-1]):
-    #for fn, g in zip(["1e-3"], [1e-3]):
-    #    IZMFSolver.procedure(filename="output_g{0}.txt".format(fn), iterable=np.logspace(-3, -1 + np.log10(7), num=40), TTc=1e-3, a_s=g, which="T")
-        #IZMFSolver.procedure(filename="output_g{0}.txt".format(fn), iterable=np.linspace(1e-3, 5e-1, num=30), TTc=1e-3, a_s=g, which="T")
+    # for fn, g in zip(["1e-4", "1e-3", "1e-2", "1e-1"], [1e-4, 1e-3, 1e-2, 1e-1]):
+    # for fn, g in zip(["1e-3"], [1e-3]):
+    #     IZMFSolver.procedure(filename="output_g{0}.txt".format(fn), iterable=np.logspace(-3, -1 + np.log10(7), num=40), TTc=1e-3, a_s=g, which="T")
+    # IZMFSolver.procedure(filename="output_g{0}.txt".format(fn), iterable=np.linspace(1e-3, 5e-1, num=30), TTc=1e-3, a_s=g, which="T")
 
-    for fn, T in zip(["0", "1e-3", "1e-2", "5e-2", "1e-1"], [1e-8, 1e-3, 1e-2, 5e-2, 1e-1]):
-    #for fn, T in zip(["1e-3"], [1e-3]):
-        IZMFSolver.procedure(filename="output_T{0}.txt".format(fn), iterable=np.logspace(-4, -1, num=20), TTc=T, a_s=1e-4, which="g")
-
+    for fn, T in zip(["0", "1e-3", "1e-2", "5e-2", "1e-1"],
+                     [1e-8, 1e-3, 1e-2, 5e-2, 1e-1]):
+        # for fn, T in zip(["1e-3"], [1e-3]):
+        IZMFSolver.procedure(
+            filename="output_T{0}.txt".format(fn),
+            iterable=np.logspace(
+                -4, -1, num=20),
+            TTc=T,
+            a_s=1e-4,
+            which="g")
