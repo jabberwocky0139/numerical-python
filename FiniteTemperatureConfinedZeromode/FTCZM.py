@@ -6,6 +6,7 @@ import numpy as np
 from scipy.linalg import solve, eig, eig_banded
 from scipy.integrate import simps
 from scipy import optimize, special
+from scipy.misc import factorial
 from abc import abstractmethod, ABCMeta
 # Clean up some warnings we know about so as not to scare the users
 import warnings
@@ -13,6 +14,7 @@ from matplotlib.cbook import MatplotlibDeprecationWarning
 warnings.simplefilter('ignore', MatplotlibDeprecationWarning)
 
 
+U_Energy = []
 omega_thermo = []
 omega_thermo_T = []
 specific_thermo = []
@@ -162,7 +164,7 @@ class PlotWrapper(metaclass=ABCMeta):
 # show plot data
         if showplot:
             plt.legend(loc=cls.legendloc)
-            #plt.pause(2.5)
+            # plt.pause(2.5)
             plt.show()
             plt.close("all")
 
@@ -231,14 +233,14 @@ class GrossPitaevskii(PlotWrapper):
 
         print("\n--*-- GP --*--")
         oldmu = 0
-        #v.xi, v.mu = cls.__psi0(v), 10
+        # v.xi, v.mu = cls.__psi0(v), 10
         if (initial):
             v.xi = np.exp(-v.R**2)
         i = 0
         while (np.abs(v.mu - oldmu) > 1e-8):
-            #i += 1
-            #if(i > 100):
-            #    cls.dt *= 0.5
+            # i += 1
+            # if(i > 100):
+            #     cls.dt *= 0.5
             oldmu = v.mu
             cls.__time_evolution(v)
             print("mu = {0}".format(v.mu), "\r", end='', flush=True)
@@ -420,7 +422,7 @@ class BogoliubovSMatrix(PlotWrapper):
             tmpVa = tmpVa.T.sum(axis=1)
             v.Va += tmpVa / v.R**2
 
-            v.Energy += (2 * l + 1) * np.dot(omega, v.ndist[l]) / v.N0
+            v.Energy += (2 * l + 1) * np.dot(omega, v.ndist[l])
             v.Specific += (2 * l + 1)**2 * np.dot(omega**2, (
                 np.exp(v.BETA * omega) + np.exp(-v.BETA * omega) - 2)**
                                                   -1) / v.Temp**2 / v.N0
@@ -582,14 +584,12 @@ class ZeroMode(PlotWrapper):
             v.dmu = optimize.brentq(
                 lambda iterdmu: cls.__output_expected_value_p(v, iterdmu),
                 -9 * abs(v.dmu),
-                10 * abs(v.dmu),
-                xtol=1e-15)
+                10 * abs(v.dmu), xtol=1e-15)
         else:
             v.dmu = optimize.brentq(
                 lambda iterdmu: cls.__output_expected_value_p(v, iterdmu),
                 -10 * abs(v.dmu),
-                9 * abs(v.dmu),
-                xtol=1e-15)
+                9 * abs(v.dmu), xtol=1e-15)
 
         print(", dmu = {0}, E0_len = {1}".format(v.dmu, v.E0.size))
         print("E0 = {0}..".format(v.E0[:3]))
@@ -619,7 +619,7 @@ class ZeroMode(PlotWrapper):
             np.abs(v.Psi0[v.NM - 1])**2,
             plotlabel="ZeroMode function : n = {0}".format(v.NM - 1))
 
-# For debug
+    # For debug
 
     @classmethod
     def __output_dmu_p(cls, v):
@@ -634,6 +634,7 @@ class ZeroMode(PlotWrapper):
     @classmethod
     def __set_zeromode_expected_value(cls, v):
 
+        v.E0 -= v.E0[0]
         dedominator = np.exp(-v.BETA * v.E0)
         # dedominator2 = np.exp(-v.BETA * (v.E0 - v.E0[0]))
 
@@ -657,17 +658,17 @@ class ZeroMode(PlotWrapper):
                         v.eta)
         v.Va += np.real(-v.xi**2 * v.Q2.real + v.eta**2 * v.P2.real)
 
+        # ---- Nakamura Method(？) ----
         psi2E0 = np.real(v.Psi0 * np.conj(v.Psi0) * v.E0.reshape(v.E0.size, 1))
-        psi2E02 = np.real(v.Psi0 * np.conj(v.Psi0) * v.E0.reshape(v.E0.size, 1)
-                          **2)
+        psi2E02 = np.real(v.Psi0 * np.conj(v.Psi0) * v.E0.reshape(v.E0.size, 1)**2)
 
-        #v.Energy += np.dot(v.E0, dedominator) / dedominator.sum()
-        #v.Specific += (np.dot(v.E0**2, dedominator)/ dedominator.sum() - (np.dot(v.E0, dedominator) / dedominator.sum())**2)/v.Temp**2
-        v.Energy += np.dot(psi2E0.sum(axis=1), dedominator) / dedominator.sum()
-        v.Specific += (
-            np.dot(psi2E02.sum(axis=1), dedominator) / dedominator.sum() -
-            (np.dot(psi2E0.sum(axis=1), dedominator) / dedominator.sum())**2
-        ) / v.Temp**2 / 100
+
+        ZeroSpecific = (np.dot(v.E0**2, dedominator) / (dedominator.sum()) - (np.dot(v.E0, dedominator) / (dedominator.sum()))**2) / v.Temp**2
+        #print('ZeroCv = {0}'.format(ZeroSpecific))
+        v.Specific += ZeroSpecific # 今回はつかわない
+        # ---- Nakamura Method(？) ----
+        v.Energy += np.dot(psi2E0.sum(axis=1), dedominator) / (dedominator.sum())
+        # v.Energy += np.dot(v.E0, dedominator) / (dedominator.sum())
         v.L = np.sqrt(v.Q2.real) * 25
         v.DQ = v.L / v.NQ
 
@@ -713,7 +714,6 @@ class PerturbedSpecificheat(object):
     
     tmt1, tmt2, tmt3, tmt4, tmt5 = [0] * 5
     tmti1, tmti2, tmti3, tmti4 = [0] * 4
-    print("--*-- PerturbedSpecificheat --*--")
     
     @classmethod
     def zero_bdg_coupling(cls, v):
@@ -722,11 +722,9 @@ class PerturbedSpecificheat(object):
         v.h_int = 0
         for l in range(v.l + 1):
             # ModifiedThermodynamicのZeromode交差項
-            tva = (2 * v.bdg_u[l] * v.bdg_v[l] * v.ndist[l].reshape(
-                v.index[l], 1) + v.bdg_u[l] * v.bdg_v[l])
+            tva = (2 * v.bdg_u[l] * v.bdg_v[l] * v.ndist[l].reshape(v.index[l], 1) + v.bdg_u[l] * v.bdg_v[l])
             tva = tva.T.sum(axis=1)
-            tvt = ((v.bdg_u[l]**2 + v.bdg_v[l]**2) * v.ndist[l].reshape(
-                v.index[l], 1) + v.bdg_v[l]**2)
+            tvt = ((v.bdg_u[l]**2 + v.bdg_v[l]**2) * v.ndist[l].reshape(v.index[l], 1) + v.bdg_v[l]**2)
             tvt = tvt.T.sum(axis=1)
             cls.tmt1 += 4 * np.pi * v.G_TILDE * (2 * l + 1) * simps(
                 v.R**2 * v.xi**2 * tva, v.R)
@@ -762,18 +760,20 @@ class PerturbedSpecificheat(object):
         cls.tmti2 = (cls.tmti2)**2
         cls.tmti3 = (cls.tmti3)**2
 
-        v.h_int +=  v.G_TILDE / (2 * v.N0) * simps(v.R**2 * (2 * cls.tmti1.real + 2 * cls.tmti2.real + cls.tmti3.real + 4 * cls.tmti4.real), v.R)
+        v.h_int += v.G_TILDE / (2 * v.N0) * simps(v.R**2 * (2 * cls.tmti1.real + 2 * cls.tmti2.real + cls.tmti3.real + 4 * cls.tmti4.real), v.R)
         # 念のため
         cls.tmti1, cls.tmti2, cls.tmti3 = 0, 0, 0
-        print('v.h_int = {0}'.format(v.h_int))
-        assert v.h_int < 1
 
     @classmethod
     def calc_specific(cls, v):
+        print("--*-- PerturbedSpecificheat --*--")
         cls.zero_bdg_coupling(v)
         cls.bdg_bdg_coupling(v)
         # 熱力学ポテンシャルの摂動項
-        v.h_int = -v.BETA**-1 * np.log(1 - v.BETA * v.h_int)
+        h_int_tmp = 0
+        for i in range(1, 20):
+            h_int_tmp += (-v.BETA * v.h_int)**i / factorial(i)
+        v.h_int = -v.BETA**-1 * (-v.BETA * h_int_tmp)
         print('<H_int> = {0}'.format(v.h_int))
 
     
@@ -803,7 +803,7 @@ class IZMFSolver(object):
 
             cls.TTc, cls.a_s = TTc, a_s
             print(
-                "# g\t T\t Q2\t P2\t Ntot\t Energy\t Cv\t beta\t Nc",
+                "# g\t T\t Temp\t Q2\t P2\t Ntot\t Energy\t Cv\t beta\t Nc",
                 file=f,
                 flush=True)
 
@@ -852,19 +852,20 @@ class IZMFSolver(object):
                     AdjointMode.procedure(v=var, showplot=False)
                     BogoliubovSMatrix.procedure(v=var, showplot=False)
                     ZeroMode.procedure(v=var, showplot=False)
-                    ParticleNumbers.procedure(v=var, T=cls.TTc)
                     PerturbedSpecificheat.calc_specific(v=var)
+                    ParticleNumbers.procedure(v=var, T=cls.TTc)
                     cls.__print_data(var, i)
                     i += 1
 
                 # 比熱のための格納
+                U_Energy.append(var.Energy)
                 omega_thermo.append(var.h_int)
                 omega_thermo_T.append(var.Temp)
-                specific_thermo.append(var.Specific)
+
                     
                 print(
-                    "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}".format(
-                        cls.a_s, cls.TTc, var.Q2.real, var.P2.real, var.Ntot,
+                    "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}".format(
+                        cls.a_s, cls.TTc, var.Temp, var.Q2.real, var.P2.real, var.Ntot,
                         var.Energy, var.Specific, var.BETA, var.Nc),
                     file=f,
                     flush=True)
@@ -872,10 +873,8 @@ class IZMFSolver(object):
 
 if (__name__ == "__main__"):
 
-    pure_T = np.logspace(-3, -1, num=100)
-    for fn, g in zip(["1e-6"],
-                     [1e-6]):
-        #for fn, g in zip(["1e-4"], [1e-4]):
+    pure_T = np.logspace(-3.2, -1 + np.log10(7), num=40)
+    for fn, g in zip(["1e-4", "1e-3", "1e-2", "1e-1"], [1e-4, 1e-3, 1e-2, 1e-1]):
         IZMFSolver.procedure(
             filename="output_g{0}.txt".format(fn),
             iterable=pure_T,
@@ -883,15 +882,22 @@ if (__name__ == "__main__"):
             a_s=g,
             which="T")
 
-    # 比熱の摂動計算
-    Cv = np.array(specific_thermo) - pure_T * np.gradient(np.gradient(omega_thermo, pure_T), pure_T)
-    specific_f = open('specific_g{0}.txt'.format(1e-6), 'w')
-    print('#{0}\t{1}\t{2}'.format('T', 'Cv', 'Unperturbed_Cv'), file=specific_f)
-    for t, cv, unperturbed_cv in zip(pure_T, Cv, specific_thermo):
-        print('{0}\t{1}\t{2}'.format(t, cv, unperturbed_cv), file=specific_f)
-        
-
     
+        # 比熱の摂動計算
+        modified_T = np.array(omega_thermo_T)
+        Cv = np.gradient(U_Energy, pure_T) / 1e3 # 粒子数ベタ
+        perturbed_Cv = Cv - pure_T * np.gradient(np.gradient(omega_thermo, pure_T), pure_T) / 1e3
+         
+        with open('specific_g{0}.txt'.format(fn), 'w') as specific_f:
+            print('#{0}\t{1}\t{2}'.format('T', 'Unperturbed_Cv', 'Perturbed_Cv'), file=specific_f, flush=True)
+            for t, unperturbed_cv, perturbed_cv in zip(pure_T, Cv, perturbed_Cv):
+                print('{0}\t{1}\t{2}'.format(t, unperturbed_cv, perturbed_cv), file=specific_f, flush=True)
+
+        # 初期化
+        U_Energy = []
+        thermo_omega = []
+        omega_thermo_T = []
+        specific_thermo = []
 
     # for fn, T in zip(["0", "1e-3", "1e-2", "5e-2", "1e-1"],
     #                  [1e-8, 1e-3, 1e-2, 5e-2, 1e-1]):
