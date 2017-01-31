@@ -815,8 +815,8 @@ class IZMFSolver(object):
         with open(filename, "w") as f:
 
             cls.TTc, cls.a_s = TTc, a_s
-            # print("# g\t T\t Temp\t Q2\t P2\t Ntot\t Energy\t <H_int>\t beta\t Nc", file=f, flush=True)
-            print("# g\t E1\t E2\t E3\t E4\t E5\t E6\t O1\t O2\t O3\t O4", file=f, flush=True)
+            print("# g\t T\t Temp\t Q2\t P2\t Ntot\t Energy\t <H_int>\t beta\t Nc", file=f, flush=True)
+            # print("# g\t E1\t E2\t E3\t E4\t E5\t E6\t O1\t O2\t O3\t O4", file=f, flush=True)
 
             for index, physicalparameter in enumerate(iterable):
 
@@ -876,48 +876,47 @@ class IZMFSolver(object):
                 Ntot.append(var.Ntot)
 
                     
-                # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}".format(cls.a_s, cls.TTc, var.Temp, var.Q2.real, var.P2.real, var.Ntot, var.Energy, var.h_int * var.BETA, var.BETA, var.Nc), file=f,flush=True)
+                print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}".format(cls.a_s, cls.TTc, var.Temp, var.Q2.real, var.P2.real, var.Ntot, var.Energy, var.h_int * var.BETA, var.BETA, var.Nc), file=f,flush=True)
                 oo = var.omegah[0][1]
-                print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}".format(var.G, var.E0[1]/oo, var.E0[2]/oo, var.E0[3]/oo, var.E0[4]/oo, var.E0[5]/oo, var.E0[6]/oo, var.omegah[0][1]/oo, var.omegah[0][2]/oo, var.omegah[0][3]/oo, var.omegah[0][4]/oo), file=f,flush=True)
+                # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}".format(var.G, var.E0[1]/oo, var.E0[2]/oo, var.E0[3]/oo, var.E0[4]/oo, var.E0[5]/oo, var.E0[6]/oo, var.omegah[0][1]/oo, var.omegah[0][2]/oo, var.omegah[0][3]/oo, var.omegah[0][4]/oo), file=f,flush=True)
 
 
 if (__name__ == "__main__"):
 
     pure_T = np.logspace(-3.2, -1 + np.log10(7), num=50)
 
-    for fn, T in zip(["1e-3"], [1e-3]):
-        #for fn, T in zip(["1e-3"], [1e-3]):
-        IZMFSolver.procedure(
-            filename="output_T{0}.txt".format(fn),
-            iterable=np.logspace(
-                -4, -1, num=30),
-            TTc=T,
-            a_s=1e-4,
-            which="g")
+    # for fn, T in zip(["1e-8"], [1e-8]):
+    #     #for fn, T in zip(["1e-3"], [1e-3]):
+    #     IZMFSolver.procedure(
+    #         filename="output_T{0}.txt".format(fn),
+    #         iterable=np.logspace(
+    #             -4, -1, num=30),
+    #         TTc=T,
+    #         a_s=1e-4,
+    #         which="g")
 
 
     
-    # pure_T = np.logspace(-3.1, -2 + np.log10(1), num=50)
-    # for fn, g in zip(["1e-4", "1e-3", "1e-2", "1e-1"], [1e-4, 1e-3, 1e-2, 1e-1]):
-    # for fn, g in zip(['1e-3'], [1e-3]):
-    #     IZMFSolver.procedure(
-    #         filename="output_g{0}.txt".format(fn),
-    #         iterable=pure_T,
-    #         TTc=1e-3,
-    #         a_s=g,
-    #         which="T")
+    pure_T = np.logspace(-3.0, -1 + np.log10(5), num=30)
+    for fn, g in zip(["1e-4", "1e-3", "1e-2", "1e-1"], [1e-4, 1e-3, 1e-2, 1e-1]):
+        IZMFSolver.procedure(
+            filename="output_g{0}.txt".format(fn),
+            iterable=pure_T,
+            TTc=1e-3,
+            a_s=g,
+            which="T")
 
 
-        # 比熱の摂動計算
-        modified_T = np.array(omega_thermo_T)
-        bogoliubov_Cv = np.gradient(U_Bogoliubov_Energy, pure_T) / 1e3 # 粒子数ベタ
-        Cv = np.gradient(U_Energy, pure_T) / 1e3 # 粒子数ベタ
-        perturbed_Cv = Cv - pure_T * np.gradient(np.gradient(omega_thermo, pure_T), pure_T) / 1e3 # 粒子数ベタ
+        # # 比熱の摂動計算
+        # modified_T = np.array(omega_thermo_T)
+        # bogoliubov_Cv = np.gradient(U_Bogoliubov_Energy, pure_T) / 1e3 # 粒子数ベタ
+        # Cv = np.gradient(U_Energy, pure_T) / 1e3 # 粒子数ベタ
+        # perturbed_Cv = Cv - pure_T * np.gradient(np.gradient(omega_thermo, pure_T), pure_T) / 1e3 # 粒子数ベタ
         
-        # with open('specific_g{0}.txt'.format(fn), 'w') as specific_f:
-        #     print('#{0}\t{1}\t{2}\t{3}\t{4}'.format('T', 'Unperturbed_Cv', 'Perturbed_Cv', 'Bogoliubov_Cv', '<H_int>'), file=specific_f, flush=True)
-        #     for t, unperturbed_cv, perturbed_cv, bogoliubov_cv, u_energy in zip(pure_T, Cv, perturbed_Cv, bogoliubov_Cv, U_Energy):
-        #         print('{0}\t{1}\t{2}\t{3}\t{4}'.format(t, unperturbed_cv, perturbed_cv, bogoliubov_cv, u_energy / t), file=specific_f, flush=True)
+        # # with open('specific_g{0}.txt'.format(fn), 'w') as specific_f:
+        # #     print('#{0}\t{1}\t{2}\t{3}\t{4}'.format('T', 'Unperturbed_Cv', 'Perturbed_Cv', 'Bogoliubov_Cv', '<H_int>'), file=specific_f, flush=True)
+        # #     for t, unperturbed_cv, perturbed_cv, bogoliubov_cv, u_energy in zip(pure_T, Cv, perturbed_Cv, bogoliubov_Cv, U_Energy):
+        # #         print('{0}\t{1}\t{2}\t{3}\t{4}'.format(t, unperturbed_cv, perturbed_cv, bogoliubov_cv, u_energy / t), file=specific_f, flush=True)
 
         # 初期化
         U_Bogoliubov_Energy = []
