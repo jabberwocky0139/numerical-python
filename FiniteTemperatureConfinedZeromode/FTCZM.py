@@ -1,5 +1,21 @@
 # coding: utf-8
 
+"""
+○ 有限温度系IZMFの数値計算.
+○ Gross-Pitaevskii方程式・Bogoliubov-de Gennes方程式・Zeromode方程式を
+   Self-consistentに解くためのソルバー.
+○ Python3.5(Anaconda)にて動作確認.
+○ 中村さんの「ゼロモード入門」の付録を参考に組んでいます. 必ず目を通すこと.
+○ g(相互作用)を固定してT(温度)を動かしたり, その逆の計算が可能.
+○ 未熟な時分に書いたのでよくない実装も含まれている. 再利用性に欠ける.
+   利用の際は書き換えることも視野に入れること. 参考程度に留めて時分で組み直す
+   のも良いと思います.
+○ 解説が不十分なものが多々あると思います. 謎コメントもいくつかあると思います.
+   わからないことがあれば鳥居に直接訊いてください.
+○ 高速化のためにPython特有の書き方を随所で用いています. 正直わかりにくい
+   ところもあると思いますが, コードが残ってるだけ有り難いと思って頑張ってください.
+"""
+
 import matplotlib.pyplot as plt
 import seaborn as sbn
 import numpy as np
@@ -9,11 +25,13 @@ from scipy import optimize, special
 from scipy.misc import factorial
 from abc import abstractmethod, ABCMeta
 from IPython import embed
+
 # Clean up some warnings we know about so as not to scare the users
 import warnings
 from matplotlib.cbook import MatplotlibDeprecationWarning
 warnings.simplefilter('ignore', MatplotlibDeprecationWarning)
 
+# global変数
 U_Bogoliubov_Energy = []
 U_Energy = []
 omega_thermo = []
@@ -21,7 +39,15 @@ omega_thermo_T = []
 specific_thermo = []
 Ntot = []
 
+
 class Variable(object):
+    """
+    ○ 物理変数を管理するクラス.
+    ○ 各g, 及びTについての計算ごとにインスタンスが生成されては破棄されていく.
+       インスタンスの寿命に注意. g, Tのステップを跨いで変数を保持することはできない.
+    ○ 保持したい場合はglobal変数を利用すること. あまりglobal変数が増えることがあれば
+       コードのリファクタリングも視野に入れること.
+    """
     def __init__(self,
                  N0=1e3,
                  G=4 * np.pi * 1e-2,
@@ -86,8 +112,6 @@ class Variable(object):
         # 系の内部エネルギー, 比熱
         self.Energy, self.Specific = 0, 0
         # Bogoliubov-de Gennes行列
-        # self.T = None
-        # self.S = None
         self.dmu = dmu
         self.selecteig = "i"
         self.bdg_u, self.bdg_v, self.ndist = [0] * (self.l + 1), [0] * (self.l + 1), [0] * (self.l + 1)
@@ -99,12 +123,16 @@ class Variable(object):
 
 class PlotWrapper(metaclass=ABCMeta):
 
-    # xcoor : iterable
-    # ycoor : iterable or funcn
-    # xrange, yrange : 2 element array-like object
-    # xlabel, ylabel, title, linecolor : string
-    # linewidth : integer
+    """
+    ○ matplotlibのためのラッパー. デバッグの際に実行途中で変数を
+       プロットしたい場合などに使うこと. 無理して使うこともない.
 
+    xcoor : iterable
+    ycoor : iterable or funcn
+    xrange, yrange : 2 element array-like object
+    xlabel, ylabel, title, linecolor : string
+    linewidth : integer
+    """
     legendloc = None
 
     @classmethod
@@ -177,6 +205,10 @@ class PlotWrapper(metaclass=ABCMeta):
 
 
 class GrossPitaevskii(PlotWrapper):
+    """
+    ○ 3次元調和トラップ系Gross-Pitaevskii方程式を解くソルバー
+    ○ (r, θ, φ)に分解しているのでコストは実質1次元.
+    """
 
     dt = 0.005
 
@@ -185,8 +217,7 @@ class GrossPitaevskii(PlotWrapper):
     def __psi0(v):
         return np.exp(-v.R**2)
 
-# Make matrix for Crank-Nicolson
-
+    # Make matrix for Crank-Nicolson
     @classmethod
     def __make_crank_matrix(cls, v):
 
@@ -200,8 +231,7 @@ class GrossPitaevskii(PlotWrapper):
 
         return a + c + d
 
-# Make vector for Crank-Nicolson
-
+    # Make vector for Crank-Nicolson
     @classmethod
     def __make_crank_vector(cls, v):
 
@@ -214,8 +244,7 @@ class GrossPitaevskii(PlotWrapper):
 
         return -(a + c + d)
 
-# Time evolution
-
+    # Time evolution
     @classmethod
     def __time_evolution(cls, v):
 
@@ -229,29 +258,24 @@ class GrossPitaevskii(PlotWrapper):
         # Normalize arr_Psi
         v.xi /= np.sqrt(norm)
 
-# Time evolution loop
-
+    # Time evolution loop
     @classmethod
     def __solve_imaginarytime_gp(cls, v, initial):
 
         print("\n--*-- GP --*--")
         oldmu = 0
-        # v.xi, v.mu = cls.__psi0(v), 10
+
         if (initial):
             v.xi = np.exp(-v.R**2)
-        i = 0
+
         while (np.abs(v.mu - oldmu) > 1e-8):
-            # i += 1
-            # if(i > 100):
-            #     cls.dt *= 0.5
             oldmu = v.mu
             cls.__time_evolution(v)
             print("mu = {0}".format(v.mu), "\r", end='', flush=True)
 
         print("")
 
-# Plot xi
-
+    # Plot xi
     @classmethod
     def __set_plot(cls, v):
 
@@ -266,8 +290,7 @@ class GrossPitaevskii(PlotWrapper):
             v.R, v.xi**2, plotlabel="gN = {0}".format(v.GN), showplot=False)
         cls.plot_getter(v.R, v.R**2, plotlabel="Potential")
 
-# Hundle
-
+    # Hundle
     @classmethod
     def procedure(cls, v, showplot=True, initial=False):
 
@@ -277,6 +300,10 @@ class GrossPitaevskii(PlotWrapper):
 
 
 class AdjointMode(PlotWrapper):
+    """
+    ○ 共役モード方程式を解くソルバー.
+    ○ 連立方程式を解くだけ.
+    """
 
     # Make equation matrix
     @staticmethod
@@ -302,8 +329,7 @@ class AdjointMode(PlotWrapper):
         dl = -0.5 / v.DR**2 * (1 - 1 / np.arange(2, v.NR + 2))
         return np.vstack((du, d, dl))
 
-# Obtain eta and I
-
+    # Obtain eta and I
     @classmethod
     def __solve_adjoint_equation(cls, v):
 
@@ -313,8 +339,7 @@ class AdjointMode(PlotWrapper):
         v.eta *= v.I
         print("I = {0}".format(v.I))
 
-# Plot eta
-
+    # Plot eta
     @classmethod
     def __set_plot(cls, v):
 
@@ -326,8 +351,7 @@ class AdjointMode(PlotWrapper):
 
         cls.plot_getter(v.R, v.eta, plotlabel="gN = {0}".format(v.GN))
 
-# Handle
-
+    # Handle
     @classmethod
     def procedure(cls, v, showplot=True):
 
@@ -337,6 +361,13 @@ class AdjointMode(PlotWrapper):
 
 
 class BogoliubovSMatrix(PlotWrapper):
+    """
+    ○ Bogoliubov-de Gennes方程式を解くソルバー.
+    ○ 計算コストを軽減するために中村さんが考案した謎技術を用いています.
+       一般固有値問題に落とし込んで右固有値・左固有値を利用しています.
+    ○ 詳細は把握しきれていません. とりあえず実装したらちゃんと動いた.
+       詳しくは中村さんに訊いてください.
+    """
 
     L, M = [None] * 2
 
@@ -430,14 +461,13 @@ class BogoliubovSMatrix(PlotWrapper):
 
             v.Energy += (2 * l + 1) * np.dot(omega, v.ndist[l])
             v.Specific += (2 * l + 1)**2 * np.dot(omega**2, (
-                np.exp(v.BETA * omega) + np.exp(-v.BETA * omega) - 2)**
-                                                  -1) / v.Temp**2 / v.N0
+                np.exp(v.BETA * omega) + np.exp(-v.BETA * omega) - 2)**-1) / v.Temp**2 / v.N0
 
             v.omegah.append(np.array(omega) - omega[0])
             print("l = {0}".format(l), "\r", end='', flush=True)
-            
+
         v.Bogoliubov_Energy = v.Energy
-        
+
         print(
             ", BdG_Va : {0:1.6f}, omega_low : {1:1.4f}, omega_high : {2:1.4f}, omega_len : {3}".
             format(v.Va[0], omega[0], omega[-1], omega.shape[0]))
@@ -457,13 +487,13 @@ class BogoliubovSMatrix(PlotWrapper):
             cls.plot_getter(
                 v.R,
                 np.real(v.Unl[l][n]),
-                plotlabel="Unl : omega={0}".format(omega[l][n]),
+                plotlabel="Unl : omega={0}".format(v.omega[l][n]),
                 showplot=False)
 
             cls.plot_getter(
                 v.R,
                 np.real(v.Vnl[l][n]),
-                plotlabel="Vnl : omega={0}".format(omega[l][n]),
+                plotlabel="Vnl : omega={0}".format(v.omega[l][n]),
                 showplot=False)
 
         plt.legend()
@@ -478,6 +508,10 @@ class BogoliubovSMatrix(PlotWrapper):
 
 
 class ZeroMode(PlotWrapper):
+    """
+    ○ Zeromode方程式を解くソルバー.
+    ○ 自己無撞着的にδμを決定します.
+    """
 
     H0 = None
 
@@ -491,12 +525,11 @@ class ZeroMode(PlotWrapper):
         v.E = v.G_TILDE * v.N0 * simps(v.R**2 * v.eta**4, v.R)
         v.G = v.N0 * simps(v.R**2 * v.eta**2, v.R)
 
-# Make Zeromode hamiltonian(Lower triangle)
-
+    # Make Zeromode hamiltonian(Lower triangle)
     @classmethod
     def __make_zeromode_band(cls, v, dmu):
 
-        #dmu = 0
+        # dmu = 0
         cls.__set_zeromode_coefficient(v)
 
         alpha = 3 * v.E / v.DQ**4 + (v.I - 4 * v.D) / v.DQ**2 + 2 * v.C * (
@@ -514,7 +547,7 @@ class ZeroMode(PlotWrapper):
     @classmethod
     def __make_zeromode_matrix(cls, v, dmu):
 
-        #dmu = 0
+        # dmu = 0
         cls.__set_zeromode_coefficient(v)
 
         alpha = np.diag(3 * v.E / v.DQ**4 + (v.I - 4 * v.D) / v.DQ**2 + 2 * v.C
@@ -532,14 +565,11 @@ class ZeroMode(PlotWrapper):
 
         cls.H0 = alpha + beta + gamma
 
-# Solve eigenvalue problem for Zeromode hamiltonian
-
+    # Solve eigenvalue problem for Zeromode hamiltonian
     @classmethod
     def __solve_zeromode_equation_v(cls, v):
 
         v.E0, v.Psi0 = eig_banded(
-            #cls.H0 + np.vstack(
-            #([0] * v.NQ, [-0.5j * dmu / v.DQ] * v.NQ, [0] * v.NQ)),
             cls.H0,
             lower=True,
             select=v.selecteig,
@@ -551,8 +581,6 @@ class ZeroMode(PlotWrapper):
     @classmethod
     def __solve_zeromode_equation_i(cls, v):
         v.E0, v.Psi0 = eig_banded(
-            #cls.H0 + np.vstack(
-            #([0] * v.NQ, [-0.5j * dmu / v.DQ] * v.NQ, [0] * v.NQ)),
             cls.H0,
             lower=True,
             select="i",
@@ -571,7 +599,6 @@ class ZeroMode(PlotWrapper):
             cls.__solve_zeromode_equation_i(v)
 
         dedominator = np.exp(-v.BETA * v.E0)
-        # dedominator2 = np.exp(-v.BETA * (v.E0 - v.E0[0]))
 
         psi = np.imag(np.conj(v.Psi0[:, :v.NQ - 1]) * v.Psi0[:, 1:])
 
@@ -585,8 +612,8 @@ class ZeroMode(PlotWrapper):
 
         return P
 
-    @classmethod
     # Find proper counter term dmu
+    @classmethod
     def __zeromode_self_consistency(cls, v):
 
         print("--*-- ZeroMode --*--")
@@ -643,7 +670,7 @@ class ZeroMode(PlotWrapper):
 
     @classmethod
     def __set_zeromode_expected_value(cls, v):
-        
+
         v.E0 -= v.E0[0]
         dedominator = np.exp(-v.BETA * v.E0)
         # dedominator2 = np.exp(-v.BETA * (v.E0 - v.E0[0]))
@@ -666,12 +693,9 @@ class ZeroMode(PlotWrapper):
 
         # ---- Nakamura Method(？) ----
         psi2E0 = np.real(v.Psi0 * np.conj(v.Psi0) * v.E0.reshape(v.E0.size, 1))
-        psi2E02 = np.real(v.Psi0 * np.conj(v.Psi0) * v.E0.reshape(v.E0.size, 1)**2)
-
 
         # ---- Nakamura Method(？) ----
         v.Energy += np.dot(psi2E0.sum(axis=1), dedominator) / (dedominator.sum())
-        # v.Energy += np.dot(v.E0, dedominator) / (dedominator.sum())
         v.L = np.sqrt(v.Q2.real) * 25
         v.DQ = v.L / v.NQ
 
@@ -694,9 +718,12 @@ class ZeroMode(PlotWrapper):
 
 
 class ParticleNumbers(object):
+    """
+    ○ 粒子数・温度などの調整
+    """
+
     @classmethod
     def __set_total_particle_number(cls, v, T):
-
         v.Nc = np.real(v.N0 * (1 + v.Q2) + v.G**2 * v.P2 - 0.5)
         v.Ntot = np.real(v.Nc + v.N0 * simps(v.R**2 * v.Vt, v.R))
 
@@ -709,15 +736,18 @@ class ParticleNumbers(object):
 
     @classmethod
     def procedure(cls, v, T):
-
         cls.__set_total_particle_number(v, T)
 
 
 class PerturbedSpecificheat(object):
-    
+    """
+    ○ 摂動計算のためのソルバー.
+    ○ 修論を見れば何をs計算しようとしているかはわかるはず.
+    """
+
     tmt1, tmt2, tmt3, tmt4, tmt5 = [0] * 5
     tmti1, tmti2, tmti3, tmti4 = [0] * 4
-    
+
     @classmethod
     def zero_bdg_coupling(cls, v):
         """Zeromode-BdGカップリングの計算"""
@@ -743,7 +773,7 @@ class PerturbedSpecificheat(object):
             cls.tmt5 += 2 * v.G_TILDE * (2 * l + 1) * simps(
                 v.R**2 * v.xi * v.eta * tvt, v.R)
 
-            
+
         print('--- DEBUG --- tmt1 = {0}, tmt2 = {1}, tmt3 = {2}, tmt4 = {3}, tmt5 = {4} --- DEBUG ---'.format(cls.tmt1 * v.Q2.real, cls.tmt2 * v.P2.real, cls.tmt3 * v.Q2.real, cls.tmt4 * v.P2.real, cls.tmt5 * v.P2.real))
         v.h_int += v.Q2.real * (-cls.tmt1 + cls.tmt3)
         v.h_int += v.P2.real * (cls.tmt2 + cls.tmt4) - cls.tmt5
@@ -785,13 +815,16 @@ class PerturbedSpecificheat(object):
         for i in range(1, 181):
             h_int_tmp += (-v.BETA * v.h_int)**i / factorial(i)
         print('<H_int> before = {0}'.format(h_int_tmp))
-        # h_int_tmp += np.log(1 - v.BETA * v.h_int)
         v.h_int = -v.BETA**-1 * h_int_tmp
         print('<H_int> = {0}'.format(v.h_int))
 
-    
 
 class IZMFSolver(object):
+    """
+    ○ クラスを統合してSelf-consistentループを回す.
+    ○ 最も洗練されていないクラス. コードからロジックを嗅ぎとって
+       各自書きなおして使うように.
+    """
 
     TTc, a_s = [None] * 2
 
@@ -816,7 +849,6 @@ class IZMFSolver(object):
 
             cls.TTc, cls.a_s = TTc, a_s
             print("# g\t T\t Temp\t Q2\t P2\t Ntot\t Energy\t <H_int>\t beta\t Nc", file=f, flush=True)
-            # print("# g\t E1\t E2\t E3\t E4\t E5\t E6\t O1\t O2\t O3\t O4", file=f, flush=True)
 
             for index, physicalparameter in enumerate(iterable):
 
@@ -855,6 +887,7 @@ class IZMFSolver(object):
 
                     var.promu, var.proI, var.proQ2, var.proP2 = var.mu, var.I, var.Q2, var.P2
 
+                    # 高速化のために前回ステップのGP解を初期値として使い回す
                     if (index == 0):
                         GrossPitaevskii.procedure(
                             v=var, showplot=False, initial=True)
@@ -875,13 +908,16 @@ class IZMFSolver(object):
                 omega_thermo_T.append(var.Temp)
                 Ntot.append(var.Ntot)
 
-                    
-                print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}".format(cls.a_s, cls.TTc, var.Temp, var.Q2.real, var.P2.real, var.Ntot, var.Energy, var.h_int * var.BETA, var.BETA, var.Nc), file=f,flush=True)
-                oo = var.omegah[0][1]
-                # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}".format(var.G, var.E0[1]/oo, var.E0[2]/oo, var.E0[3]/oo, var.E0[4]/oo, var.E0[5]/oo, var.E0[6]/oo, var.omegah[0][1]/oo, var.omegah[0][2]/oo, var.omegah[0][3]/oo, var.omegah[0][4]/oo), file=f,flush=True)
+                print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}".format(cls.a_s, cls.TTc, var.Temp, var.Q2.real, var.P2.real, var.Ntot, var.Energy, var.h_int * var.BETA, var.BETA, var.Nc), file=f, flush=True)
 
 
 if (__name__ == "__main__"):
+    """
+    ○ IZMFSolverをハンドルする最高に洗練されていないmain関数.
+    ○ g, Tのどちらを固定するかなどはここで指定する.
+    ○ コードの断片をコメントアウトで残しておきます.
+    ○ まるっと書きなおしていただいて構いません.
+    """
 
     pure_T = np.logspace(-3.2, -1 + np.log10(7), num=50)
 
@@ -895,8 +931,6 @@ if (__name__ == "__main__"):
     #         a_s=1e-4,
     #         which="g")
 
-
-    
     pure_T = np.logspace(-3.0, -1 + np.log10(5), num=30)
     for fn, g in zip(["1e-4", "1e-3", "1e-2", "1e-1"], [1e-4, 1e-3, 1e-2, 1e-1]):
         IZMFSolver.procedure(
@@ -912,7 +946,7 @@ if (__name__ == "__main__"):
         # bogoliubov_Cv = np.gradient(U_Bogoliubov_Energy, pure_T) / 1e3 # 粒子数ベタ
         # Cv = np.gradient(U_Energy, pure_T) / 1e3 # 粒子数ベタ
         # perturbed_Cv = Cv - pure_T * np.gradient(np.gradient(omega_thermo, pure_T), pure_T) / 1e3 # 粒子数ベタ
-        
+
         # # with open('specific_g{0}.txt'.format(fn), 'w') as specific_f:
         # #     print('#{0}\t{1}\t{2}\t{3}\t{4}'.format('T', 'Unperturbed_Cv', 'Perturbed_Cv', 'Bogoliubov_Cv', '<H_int>'), file=specific_f, flush=True)
         # #     for t, unperturbed_cv, perturbed_cv, bogoliubov_cv, u_energy in zip(pure_T, Cv, perturbed_Cv, bogoliubov_Cv, U_Energy):
